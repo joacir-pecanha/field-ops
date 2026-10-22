@@ -3,7 +3,7 @@
 ## 1. Autoridade e Governança Humana
 - **Responsável Humano / Tech Lead:** Joacir Peçanha
 - **Regra Fundamental de Governança:** Qualquer alteração arquitetural, quebra de contrato de API, alteração de schema do banco de dados (SQLite), exclusão de arquivos ou finalização de tarefa/épico **exige aprovação explícita de Joacir Peçanha**.
-- O agente atua sob o modelo **Spec-Driven Development (SDD)**. Nenhuma linha de código de feature deve ser escrita sem uma especificação aprovada em `governance/specs/` e uma tarefa ativa em `governance/tasks/`.
+- O agente atua sob o modelo **Spec-Driven Development (SDD)**. Nenhuma linha de código de feature deve ser escrita sem uma especificação aprovada em `base-conhecimento/governance/specs/` e uma tarefa ativa em `base-conhecimento/governance/tasks/`.
 
 ## 2. Tecnologias e Versões Estritas (Expo v57)
 - **Expo Framework:** Versão 57.x (`expo@~57.0.18`).

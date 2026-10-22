@@ -15,7 +15,7 @@ Bem-vindo à base de governança e conhecimento do projeto **FieldOps**. Este re
 ## 2. Estrutura de Diretórios da Governança
 
 ```
-governance/
+base-conhecimento/governance/
 ├── README.md                          # Este documento (visão geral)
 ├── sdd-framework.md                   # Princípios e fluxo metodológico do SDD
 ├── templates/                         # Templates padronizados
