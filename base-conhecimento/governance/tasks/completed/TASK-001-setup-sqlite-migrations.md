@@ -3,7 +3,7 @@
 ## 1. Metadados
 - **ID:** TASK-001
 - **Épico / Módulo:** Mobile / Offline-First / Database
-- **Status:** APPROVED
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md)
@@ -48,7 +48,7 @@ Atualmente, o diretório `mobile/src/infrastructure/database` possui stubs e per
 - [x] **CA-01:** O banco de dados inicia sem erros em ambiente mobile e aplica todas as tabelas na versão 1.
 - [x] **CA-02:** É possível inserir e buscar uma inspeção e uma operação outbox no SQLite nativo.
 - [x] **CA-03:** `npx tsc --noEmit` executa sem nenhum erro de tipagem no projeto mobile.
-- [ ] **CA-04:** Validação e aprovação final de Joacir Peçanha.
+- [x] **CA-04:** Validação e aprovação final de Joacir Peçanha.
 
 ---
 
