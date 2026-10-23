@@ -148,37 +148,93 @@ export const getCurrentDbVersion = async (db: SQLiteDatabase): Promise<number> =
   return result.user_version ?? Object.values(result)[0] ?? 0;
 };
 
+let migrationPromise: Promise<void> | null = null;
+let initPromise: Promise<SQLiteDatabase> | null = null;
+
 /**
  * Executa as migrações pendentes em ordem sequencial e atualiza o user_version dentro de transação atômica.
  * Ativa obrigatoriamente PRAGMA foreign_keys = ON antes de processar.
+ * Possui proteção de concorrência contra chamadas simultâneas (ex: React StrictMode) e transações aninhadas.
  */
 export const runMigrations = async (db: SQLiteDatabase): Promise<void> => {
-  // RT-03: Garante que chaves estrangeiras estejam ativadas na sessão
-  await db.execAsync('PRAGMA foreign_keys = ON;');
-
-  const currentVersion = await getCurrentDbVersion(db);
-
-  const pendingMigrations = MIGRATIONS.filter((m) => m.version > currentVersion).sort(
-    (a, b) => a.version - b.version
-  );
-
-  if (pendingMigrations.length === 0) {
-    return;
+  if (migrationPromise) {
+    return migrationPromise;
   }
 
-  for (const migration of pendingMigrations) {
-    await db.withTransactionAsync(async () => {
-      await migration.up(db);
-      await db.execAsync(`PRAGMA user_version = ${migration.version};`);
-    });
-  }
+  migrationPromise = (async () => {
+    // RT-03: Garante que chaves estrangeiras estejam ativadas na sessão
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+
+    const currentVersion = await getCurrentDbVersion(db);
+
+    const pendingMigrations = MIGRATIONS.filter((m) => m.version > currentVersion).sort(
+      (a, b) => a.version - b.version
+    );
+
+    if (pendingMigrations.length === 0) {
+      return;
+    }
+
+    const inTx = typeof db.isInTransactionAsync === 'function'
+      ? await db.isInTransactionAsync().catch(() => false)
+      : false;
+
+    for (const migration of pendingMigrations) {
+      if (inTx) {
+        await migration.up(db);
+        await db.execAsync(`PRAGMA user_version = ${migration.version};`);
+      } else {
+        try {
+          await db.withTransactionAsync(async () => {
+            await migration.up(db);
+            await db.execAsync(`PRAGMA user_version = ${migration.version};`);
+          });
+        } catch (err: any) {
+          // Fallback para ambientes (ex: Web wa-sqlite) onde o driver já gerencia a transação
+          if (err?.message?.includes('cannot start a transaction within a transaction')) {
+            await migration.up(db);
+            await db.execAsync(`PRAGMA user_version = ${migration.version};`);
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+  })().finally(() => {
+    migrationPromise = null;
+  });
+
+  return migrationPromise;
 };
 
 /**
  * Inicializa a conexão do banco de dados e executa automaticamente as migrações sequenciais.
+ * Utiliza promessa singleton para evitar inicializações concorrentes na montagem do app.
  */
 export const initDatabase = async (): Promise<SQLiteDatabase> => {
-  const db = await getDatabase();
-  await runMigrations(db);
-  return db;
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
+    try {
+      const db = await getDatabase();
+      await runMigrations(db);
+      return db;
+    } catch (error) {
+      initPromise = null;
+      throw error;
+    }
+  })();
+
+  return initPromise;
 };
+
+/**
+ * Redefine o estado de inicialização (útil para testes unitários).
+ */
+export const resetInitDatabaseState = (): void => {
+  initPromise = null;
+  migrationPromise = null;
+};
+
