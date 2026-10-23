@@ -3,7 +3,7 @@
 ## 1. Metadados
 - **ID:** TASK-003
 - **Épico / Módulo:** Mobile / Checklist Dinâmico / UI
-- **Status:** IN_REVIEW
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-003-mobile-dynamic-checklist.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-003-mobile-dynamic-checklist.md)
@@ -55,7 +55,7 @@ O núcleo da experiência em campo é o preenchimento de checklists. Esta tarefa
 - [x] **CA-01:** Todos os 7 tipos mapeados no SPEC-003 renderizam seus componentes visuais adequados.
 - [x] **CA-02:** Tipo desconhecido renderiza um fallback de alerta sem travar a interface.
 - [x] **CA-03:** Testes unitários validam a renderização e interação de cada componente.
-- [ ] **CA-04:** Aprovação de Joacir Peçanha.
+- [x] **CA-04:** Aprovação de Joacir Peçanha.
 
 ---
 
