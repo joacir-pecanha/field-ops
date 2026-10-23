@@ -1,9 +1,10 @@
-import { type SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from './db';
 
 /**
  * DDL completo do Schema Inicial (v1) conforme SPEC-001.
  * Define tabelas para usuários, inspeções, seções, itens, respostas, evidências e fila outbox.
+ * Garante integridade referencial com chaves estrangeiras ativadas e índices de busca.
  */
 export const SCHEMA_V1_DDL = `
 -- 1. Usuário / Sessão Local
@@ -142,12 +143,14 @@ export const MIGRATIONS: Migration[] = [
  * Recupera a versão atual do banco de dados utilizando PRAGMA user_version.
  */
 export const getCurrentDbVersion = async (db: SQLiteDatabase): Promise<number> => {
-  const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version;');
-  return result?.user_version ?? 0;
+  const result = await db.getFirstAsync<Record<string, number>>('PRAGMA user_version;');
+  if (!result) return 0;
+  return result.user_version ?? Object.values(result)[0] ?? 0;
 };
 
 /**
  * Executa as migrações pendentes em ordem sequencial e atualiza o user_version dentro de transação atômica.
+ * Ativa obrigatoriamente PRAGMA foreign_keys = ON antes de processar.
  */
 export const runMigrations = async (db: SQLiteDatabase): Promise<void> => {
   // RT-03: Garante que chaves estrangeiras estejam ativadas na sessão
