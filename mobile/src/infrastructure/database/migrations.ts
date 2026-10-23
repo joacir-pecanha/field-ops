@@ -141,8 +141,20 @@ export const MIGRATIONS: Migration[] = [
 
 /**
  * Recupera a versão atual do banco de dados utilizando PRAGMA user_version.
+ * Valida a existência real da tabela 'inspections' para recuperar bancos com versão corrompida.
  */
 export const getCurrentDbVersion = async (db: SQLiteDatabase): Promise<number> => {
+  try {
+    const tableCheck = await db.getFirstAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'inspections';"
+    );
+    if (!tableCheck) {
+      return 0;
+    }
+  } catch {
+    return 0;
+  }
+
   const result = await db.getFirstAsync<Record<string, number>>('PRAGMA user_version;');
   if (!result) return 0;
   return result.user_version ?? Object.values(result)[0] ?? 0;
