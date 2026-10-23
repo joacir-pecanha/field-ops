@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     marginBottom: tokens.spacing.l,
   },
   greeting: {
-    fontSize: tokens.typography.fontSizes.xlarge,
+    fontSize: tokens.typography.fontSizes.title,
     fontWeight: tokens.typography.fontWeights.bold,
     color: tokens.colors.text,
   },
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     padding: tokens.spacing.s,
   },
   metricValue: {
-    fontSize: tokens.typography.fontSizes.xlarge,
+    fontSize: tokens.typography.fontSizes.title,
     fontWeight: tokens.typography.fontWeights.bold,
     color: tokens.colors.text,
     marginTop: tokens.spacing.s,

@@ -6,7 +6,7 @@
 - **Status:** APPROVED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
-- **Especificação de Referência:** [governance/specs/SPEC-003-mobile-dynamic-checklist.md](file:///c:/Users/Joacir/Desktop/field-ops/governance/specs/SPEC-003-mobile-dynamic-checklist.md)
+- **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-003-mobile-dynamic-checklist.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-003-mobile-dynamic-checklist.md)
 - **Data de Criação:** 2026-10-22
 - **Data de Conclusão:** Pendente
 

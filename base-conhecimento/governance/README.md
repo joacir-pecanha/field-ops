@@ -58,8 +58,15 @@ base-conhecimento/governance/
 ## 4. Documentação de Domínio de Referência
 
 A governança do projeto consolida as decisões detalhadas na pasta `docs/`:
+- [project-backlog-cards.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/project-backlog-cards.md): Catálogo completo de cards e tarefas mapeadas para o GitHub Project.
 - [visao_geral.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/visao_geral.md): Escopo do MVP, usuários e premissas.
 - [objetivos.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/objetivos.md): Objetivos de negócio, mobile e indicadores de sucesso.
+- [regras-de-negocio.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/regras-de-negocio.md): 90 regras de negócio auditáveis (RN-001 a RN-090).
+- [criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md): Critérios formais de aceitação (AC-AUTH a AC-RELEASE).
+- [definition-of-done.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/definition-of-done.md): Definição de pronto para histórias, mobile, web, API, sprint e MVP.
 - [fluxo_geral.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/fluxo_geral.md): Máquina de estados, regras de transição e fluxo offline.
 - [aplicativo_mobile.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/aplicativo_mobile.md): Catálogo de telas, componentes do checklist dinâmico e stack.
+- [inferface-web.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/inferface-web.md): Telas administrativas, builder de modelos e revisão.
+- [modelo-de-dados.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/modelo-de-dados.md): DDL e modelos relacionais (PostgreSQL e SQLite).
 - [arquitetura.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/arquitetura.md): Clean architecture, Outbox pattern, persistência e segurança.
+

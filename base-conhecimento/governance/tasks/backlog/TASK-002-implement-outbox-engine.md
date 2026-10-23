@@ -6,7 +6,7 @@
 - **Status:** APPROVED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
-- **Especificação de Referência:** [governance/specs/SPEC-002-mobile-outbox-sync.md](file:///c:/Users/Joacir/Desktop/field-ops/governance/specs/SPEC-002-mobile-outbox-sync.md)
+- **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-002-mobile-outbox-sync.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-002-mobile-outbox-sync.md)
 - **Data de Criação:** 2026-10-22
 - **Data de Conclusão:** Pendente
 
