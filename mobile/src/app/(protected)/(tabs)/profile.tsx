@@ -2,17 +2,18 @@ import React from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView } from 'react-native';
 import { tokens } from '@/design-system/tokens';
 import { Button } from '@/design-system/components/Button';
-import { useAuthStore } from '@/features/auth/store';
+import { useAuth } from '@/features/auth/context/AuthContext';
 import { seedDatabase } from '@/infrastructure/database';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
-  const { logout } = useAuthStore();
-  const fakeUser = {
-    name: 'Joacir Peçanha',
-    email: 'joacir@example.com',
-    role: 'INSPECTOR',
-    phone: '+55 11 99999-9999',
+  const { user, logout } = useAuth();
+
+  const currentUser = {
+    name: user?.name || 'Técnico FieldOps',
+    email: user?.email || 'tecnico@fieldops.com',
+    role: user?.role || 'TECHNICIAN',
+    phone: user?.phone || 'Não informado',
   };
 
   const handleSeed = async () => {
@@ -36,21 +37,21 @@ export default function ProfileScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarText}>{fakeUser.name.charAt(0)}</Text>
+          <Text style={styles.avatarText}>{currentUser.name.charAt(0)}</Text>
         </View>
-        <Text style={styles.name}>{fakeUser.name}</Text>
-        <Text style={styles.role}>{fakeUser.role}</Text>
+        <Text style={styles.name}>{currentUser.name}</Text>
+        <Text style={styles.role}>{currentUser.role}</Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Dados Pessoais</Text>
         <View style={styles.infoRow}>
           <MaterialIcons name="email" size={20} color={tokens.colors.textMuted} />
-          <Text style={styles.infoText}>{fakeUser.email}</Text>
+          <Text style={styles.infoText}>{currentUser.email}</Text>
         </View>
         <View style={styles.infoRow}>
           <MaterialIcons name="phone" size={20} color={tokens.colors.textMuted} />
-          <Text style={styles.infoText}>{fakeUser.phone}</Text>
+          <Text style={styles.infoText}>{currentUser.phone}</Text>
         </View>
       </View>
 

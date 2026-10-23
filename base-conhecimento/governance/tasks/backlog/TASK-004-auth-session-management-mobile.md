@@ -50,23 +50,32 @@ O aplicativo mobile precisa gerenciar a identidade do técnico de campo de forma
 ---
 
 ## 5. Plano de Execução Passo a Passo
-- [ ] **Passo 1:** Implementar serviço `authStorage.ts` para salvar, carregar e remover tokens e dados do perfil no SecureStore.
-- [ ] **Passo 2:** Configurar interceptor HTTP em `apiClient.ts` com fila de reintentos para tratamento de 401 e renovação de token.
-- [ ] **Passo 3:** Criar o hook/store `useAuth` e provedor de contexto de autenticação.
-- [ ] **Passo 4:** Desenvolver a tela `login.tsx` com tratamento de loading, mensagens de erro compreensíveis e acessibilidade.
-- [ ] **Passo 5:** Configurar guards de rota em `app/_layout.tsx` e `app/(protected)/_layout.tsx`.
-- [ ] **Passo 6:** Criar testes unitários para o fluxo de armazenamento, renovação e expiração de sessão.
+- [x] **Passo 1:** Implementar serviço `authStorage.ts` para salvar, carregar e remover tokens e dados do perfil no SecureStore.
+- [x] **Passo 2:** Configurar interceptor HTTP em `apiClient.ts` com fila de reintentos para tratamento de 401 e renovação de token.
+- [x] **Passo 3:** Criar o hook/store `useAuth` e provedor de contexto de autenticação.
+- [x] **Passo 4:** Desenvolver a tela `login.tsx` com tratamento de loading, mensagens de erro compreensíveis e acessibilidade.
+- [x] **Passo 5:** Configurar guards de rota em `app/_layout.tsx` e `app/(protected)/_layout.tsx`.
+- [x] **Passo 6:** Criar testes unitários para o fluxo de armazenamento, renovação e expiração de sessão.
 
 ---
 
 ## 6. Critérios de Aceitação (Definition of Done)
-- [ ] **CA-01:** Login bem-sucedido redireciona para a aba principal `(tabs)/index` e persiste a sessão no SecureStore.
-- [ ] **CA-02:** Token expirado é renovado silenciosamente e repete a requisição protegida sem intervenção do usuário.
-- [ ] **CA-03:** Logout elimina tokens locais e impede retorno a telas protegidas pelo botão voltar.
-- [ ] **CA-04:** `npx tsc --noEmit` executa sem erros de tipagem.
+- [x] **CA-01:** Login bem-sucedido redireciona para a aba principal `(tabs)/index` e persiste a sessão no SecureStore.
+- [x] **CA-02:** Token expirado é renovado silenciosamente e repete a requisição protegida sem intervenção do usuário.
+- [x] **CA-03:** Logout elimina tokens locais e impede retorno a telas protegidas pelo botão voltar.
+- [x] **CA-04:** `npx tsc --noEmit` executa sem erros de tipagem.
 - [ ] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
 ## 7. Registro de Execução & Decisões Técnicas
-*(Preenchido durante o desenvolvimento)*
+- **2026-10-23 (Coder Agent):**
+  - Instalado módulo `expo-secure-store@~57.0.4` compatível com Expo SDK 57.
+  - Implementado `authStorage.ts` com interface de injeção `ISecureStorage` para persistência exclusiva de JWT e dados de perfil com isolamento em hardware seguro e sanitização total contra logs (RT-01, RT-02, RN-007).
+  - Implementado `apiClient.ts` com interceptor HTTP de erro 401, fila de espera paralela (`refreshQueue`) para evitar múltiplas chamadas concorrentes ao endpoint `/api/v1/auth/refresh`, flag `_retry` contra loops infinitos e disparador `onSessionExpired` que revoga a sessão em caso de falha irreversível (AC-AUTH, EX-02).
+  - Criado `authApi.ts` mapeando respostas de erro de negócio: mensagens genéricas para credenciais inválidas (RF-02), orientações de inativação (RF-03) e feedback offline (EX-01).
+  - Criado schema Zod `loginSchema` em `authSchemas.ts` (RT-04).
+  - Implementado store Zustand `useAuthStore` integrado bidirecionalmente com `authStorage` e `apiClient`, além do provedor `AuthProvider` e hook `useAuth()`.
+  - Atualizada tela de login `login.tsx` com feedback visual de validação por campo, banner de erro acessível (`accessibilityRole="alert"`) e proteção de desativação durante requisições ativas.
+  - Configurados route guards em `_layout.tsx` e `(protected)/_layout.tsx` com redirecionamento de desautenticados para `/(public)/login` e verificação de inicialização para evitar flashes de navegação.
+  - Adicionadas 21 novas asserções de teste unitário (`authStorage.test.ts`, `apiClient.test.ts`, `authStore.test.ts`). Total da suíte executando 85 testes com 100% de sucesso e `npx tsc --noEmit` validado com zero erros de tipagem.
