@@ -49,7 +49,7 @@ No SDD:
 
 ## 3. Regras de Ouro para Agentes
 
-1. **Nunca suponha contratos:** Se um endpoint, payload ou schema não estiver claro na spec, pergunte a Joacir Peçanha antes de codificar.
+1. **Nunca suponha contratos:** Se um endpoint, payload ou schema não estiver claro na spec, pergunte ao responsável humano antes de codificar.
 2. **Preserve a Integridade Offline:** Qualquer fluxo que salve dados no mobile deve garantir gravação em SQLite primeiro e criação de operação na Outbox.
 3. **Mantenha os Tipos Estritos:** Nenhum uso de `any` desnecessário em TypeScript. Use schemas Zod para validar payloads em tempo de execução.
 4. **Uma Tarefa por Vez:** Agentes não devem trabalhar em múltiplas tarefas concorrentes na pasta `tasks/in-progress/`.
