@@ -3,7 +3,7 @@
 ## 1. Metadados
 - **ID:** TASK-002
 - **Épico / Módulo:** Mobile / Sincronização & Resiliência
-- **Status:** IN_REVIEW
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-002-mobile-outbox-sync.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-002-mobile-outbox-sync.md)
@@ -47,7 +47,7 @@ O técnico de campo opera rotineiramente em áreas sem cobertura de internet mó
 - [x] **CA-01:** Operações pendentes são despachadas com sucesso ao simular conexão online.
 - [x] **CA-02:** Em caso de falha de conexão, nenhuma operação é removida da tabela `outbox_operations`.
 - [x] **CA-03:** A UI de sincronização exibe claramente o estado atual (ex: "Sincronizado", "3 operações pendentes").
-- [ ] **CA-04:** Aprovação de Joacir Peçanha.
+- [x] **CA-04:** Aprovação de Joacir Peçanha.
 
 ---
 
