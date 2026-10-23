@@ -39,8 +39,10 @@ export const useSyncStore = create<SyncState>((set) => ({
 
   setCounts: (pending, error, operations) =>
     set({ pendingCount: pending, errorCount: error, operations }),
-  setSyncing: (isSyncing) => set({ isSyncing }),
-  setOnline: (isOnline) => set({ isOnline }),
+  setSyncing: (isSyncing) =>
+    set((state) => (state.isSyncing === isSyncing ? state : { isSyncing })),
+  setOnline: (isOnline) =>
+    set((state) => (state.isOnline === isOnline ? state : { isOnline })),
   setLastSync: (result, message, timestamp = new Date().toISOString()) =>
     set({ lastSyncResult: result, lastSyncMessage: message, lastSyncAt: timestamp }),
   incrementSyncedCount: (amount) =>
@@ -52,7 +54,15 @@ export const useSyncStore = create<SyncState>((set) => ({
  * Integra SQLite durável, Zustand para estado em tempo real e NetworkMonitor.
  */
 export function useSyncStatus() {
-  const store = useSyncStore();
+  const pendingCount = useSyncStore((s) => s.pendingCount);
+  const syncedCount = useSyncStore((s) => s.syncedCount);
+  const errorCount = useSyncStore((s) => s.errorCount);
+  const isSyncing = useSyncStore((s) => s.isSyncing);
+  const isOnline = useSyncStore((s) => s.isOnline);
+  const lastSyncAt = useSyncStore((s) => s.lastSyncAt);
+  const lastSyncResult = useSyncStore((s) => s.lastSyncResult);
+  const lastSyncMessage = useSyncStore((s) => s.lastSyncMessage);
+  const operations = useSyncStore((s) => s.operations);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -65,68 +75,70 @@ export function useSyncStatus() {
       );
       const online = await networkMonitor.isOnline();
 
-      store.setOnline(online);
-      store.setCounts(pendingOps.length, errorOps.length, allOps);
+      const { setOnline, setCounts } = useSyncStore.getState();
+      setOnline(online);
+      setCounts(pendingOps.length, errorOps.length, allOps);
     } catch (err) {
       console.warn('[useSyncStatus] Erro ao atualizar status:', err);
     }
-  }, [store]);
+  }, []);
 
   const syncNow = useCallback(async (): Promise<SyncResult> => {
-    store.setSyncing(true);
+    const { setSyncing, incrementSyncedCount, setLastSync } = useSyncStore.getState();
+    setSyncing(true);
     try {
       const result = await outboxEngine.sync();
 
       if (result.success) {
-        store.incrementSyncedCount(result.processedCount);
-        store.setLastSync('SUCCESS', result.message);
+        incrementSyncedCount(result.processedCount);
+        setLastSync('SUCCESS', result.message);
       } else if (result.reason === 'OFFLINE') {
-        store.setLastSync('OFFLINE', result.message);
+        setLastSync('OFFLINE', result.message);
       } else if (result.reason === 'PARTIAL_ERROR') {
-        store.incrementSyncedCount(result.processedCount);
-        store.setLastSync('PARTIAL', result.message);
+        incrementSyncedCount(result.processedCount);
+        setLastSync('PARTIAL', result.message);
       } else {
-        store.setLastSync('ERROR', result.message);
+        setLastSync('ERROR', result.message);
       }
 
       await refreshStatus();
       return result;
     } finally {
-      store.setSyncing(false);
+      setSyncing(false);
     }
-  }, [store, refreshStatus]);
+  }, [refreshStatus]);
 
   const setMockOnline = useCallback(
     (online: boolean | null) => {
       networkMonitor.setMockStatus(online);
-      store.setOnline(online ?? true);
+      useSyncStore.getState().setOnline(online ?? true);
       refreshStatus();
     },
-    [store, refreshStatus]
+    [refreshStatus]
   );
 
   useEffect(() => {
     refreshStatus();
 
     const unsubscribe = networkMonitor.subscribe((online) => {
-      store.setOnline(online);
+      useSyncStore.getState().setOnline(online);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [refreshStatus, store]);
+  }, [refreshStatus]);
 
   return {
-    pendingCount: store.pendingCount,
-    syncedCount: store.syncedCount,
-    errorCount: store.errorCount,
-    isSyncing: store.isSyncing,
-    isOnline: store.isOnline,
-    lastSyncAt: store.lastSyncAt,
-    lastSyncResult: store.lastSyncResult,
-    lastSyncMessage: store.lastSyncMessage,
-    operations: store.operations,
+    pendingCount,
+    syncedCount,
+    errorCount,
+    isSyncing,
+    isOnline,
+    lastSyncAt,
+    lastSyncResult,
+    lastSyncMessage,
+    operations,
     syncNow,
     refreshStatus,
     setMockOnline,
