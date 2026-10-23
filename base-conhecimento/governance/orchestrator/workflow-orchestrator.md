@@ -46,7 +46,7 @@ flowchart TD
 
 ### Etapa 3: Execução e Codificação (Coder Agent)
 1. O **Coder Agent** inicia a sessão lendo obrigatoriamente:
-   - `mobile/AGENTS.md`
+   - `AGENTS.md`
    - `governance/tasks/in-progress/TASK-XXX.md`
    - A especificação referenciada em `governance/specs/`
 2. O agente executa os passos descritos, respeitando os arquivos declarados.

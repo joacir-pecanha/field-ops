@@ -50,8 +50,10 @@ export default function InspectionsScreen() {
   const filteredInspections = useMemo(() => {
     return inspections.filter(item => {
       const query = searchQuery.toLowerCase();
-      const matchClient = item.client.toLowerCase().includes(query);
-      const matchSite = item.site.toLowerCase().includes(query);
+      const client = item.client_name || item.client || '';
+      const site = item.site_name || item.site || '';
+      const matchClient = client.toLowerCase().includes(query);
+      const matchSite = site.toLowerCase().includes(query);
       return matchClient || matchSite;
     });
   }, [inspections, searchQuery]);
@@ -59,11 +61,14 @@ export default function InspectionsScreen() {
   const renderItem = ({ item }: { item: Inspection }) => {
     const isOffline = !item.remote_id;
     const isPendingSync = pendingSyncIds.has(item.id);
+    const clientName = item.client_name || item.client || 'Sem cliente';
+    const siteName = item.site_name || item.site || 'Sem local';
+    const equipmentName = item.equipment_name || item.equipment;
 
     return (
       <Card style={styles.card} onPress={() => {}}>
         <View style={styles.cardHeader}>
-          <Text style={styles.clientName}>{item.client}</Text>
+          <Text style={styles.clientName}>{clientName}</Text>
           <View style={styles.indicators}>
             {isOffline && (
               <MaterialIcons name="cloud-off" size={16} color={tokens.colors.textMuted} style={styles.indicatorIcon} />
@@ -77,12 +82,12 @@ export default function InspectionsScreen() {
         <View style={styles.cardBody}>
           <View style={styles.infoRow}>
             <MaterialIcons name="location-on" size={16} color={tokens.colors.textMuted} />
-            <Text style={styles.infoText}>{item.site}</Text>
+            <Text style={styles.infoText}>{siteName}</Text>
           </View>
-          {item.equipment && (
+          {equipmentName && (
             <View style={styles.infoRow}>
               <MaterialIcons name="build" size={16} color={tokens.colors.textMuted} />
-              <Text style={styles.infoText}>{item.equipment}</Text>
+              <Text style={styles.infoText}>{equipmentName}</Text>
             </View>
           )}
         </View>
