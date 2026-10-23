@@ -36,9 +36,9 @@ Atualmente, o diretório `mobile/src/infrastructure/database` possui stubs e per
 ---
 
 ## 5. Plano de Execução Passo a Passo
-- [ ] **Passo 1:** Atualizar `types.ts` com as interfaces de Inspeção, Seções, Itens, Respostas, Evidências e Outbox.
-- [ ] **Passo 2:** Estruturar arquivo de migração inicial `migrations.ts` com o DDL completo do SPEC-001.
-- [ ] **Passo 3:** Implementar abertura assíncrona do banco em `db.ts` e orquestrador de migrações.
+- [x] **Passo 1:** Atualizar `types.ts` com as interfaces de Inspeção, Seções, Itens, Respostas, Evidências e Outbox.
+- [x] **Passo 2:** Estruturar arquivo de migração inicial `migrations.ts` com o DDL completo do SPEC-001.
+- [x] **Passo 3:** Implementar abertura assíncrona do banco em `db.ts` e orquestrador de migrações.
 - [ ] **Passo 4:** Criar `inspectionRepository.ts` e `outboxRepository.ts` consumindo o banco SQLite real.
 - [ ] **Passo 5:** Executar testes unitários e rodar `npx tsc --noEmit` para validação estática.
 
@@ -47,10 +47,15 @@ Atualmente, o diretório `mobile/src/infrastructure/database` possui stubs e per
 ## 6. Critérios de Aceitação (Definition of Done)
 - [ ] **CA-01:** O banco de dados inicia sem erros em ambiente mobile e aplica todas as tabelas na versão 1.
 - [ ] **CA-02:** É possível inserir e buscar uma inspeção e uma operação outbox no SQLite nativo.
-- [ ] **CA-03:** `npx tsc --noEmit` executa sem nenhum erro de tipagem no projeto mobile.
+- [x] **CA-03:** `npx tsc --noEmit` executa sem nenhum erro de tipagem no projeto mobile.
 - [ ] **CA-04:** Validação e aprovação final de Joacir Peçanha.
 
 ---
 
 ## 7. Registro de Execução & Decisões Técnicas
-*(A ser preenchido durante a execução)*
+- **Instalação da biblioteca nativa:** Adicionado `expo-sqlite@~57.0.4` via Expo CLI em conformidade com o SDK Expo 57.
+- **Tipagem (Passo 1):** `types.ts` atualizado com interfaces completas de `User`, `Inspection`, `ChecklistSection`, `ChecklistItem`, `ChecklistResponse`, `InspectionEvidence`, `OutboxOperation` e tipos de status de negócio/sincronização baseados no SPEC-001 e SPEC-002, mantendo retrocompatibilidade com UI existente.
+- **DDL e Migrações (Passo 2):** Estruturado `migrations.ts` contendo o DDL integral das 7 tabelas com chaves estrangeiras (`ON DELETE CASCADE` e `ON DELETE SET NULL`), índices de status/sync e orquestrador via `PRAGMA user_version` dentro de transação atômica (`withTransactionAsync`).
+- **Conexão SQLite (Passo 3):** Implementado `db.ts` com singleton assíncrono através de `openDatabaseAsync('fieldops.db')`, ativando compulsoriamente `PRAGMA foreign_keys = ON;` e `PRAGMA journal_mode = WAL;`.
+- **Validação:** Validação estática `npx tsc --noEmit` passou com 0 erros. DDL validado com integridade referencial e cascade deletion.
+
