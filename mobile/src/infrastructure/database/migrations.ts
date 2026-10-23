@@ -154,7 +154,7 @@ let initPromise: Promise<SQLiteDatabase> | null = null;
 /**
  * Executa as migrações pendentes em ordem sequencial e atualiza o user_version dentro de transação atômica.
  * Ativa obrigatoriamente PRAGMA foreign_keys = ON antes de processar.
- * Possui proteção de concorrência contra chamadas simultâneas (ex: React StrictMode) e transações aninhadas.
+ * Possui proteção de concorrência e gerenciamento resiliente de transações multiplataforma (Web/iOS/Android).
  */
 export const runMigrations = async (db: SQLiteDatabase): Promise<void> => {
   if (migrationPromise) {
@@ -184,19 +184,26 @@ export const runMigrations = async (db: SQLiteDatabase): Promise<void> => {
         await migration.up(db);
         await db.execAsync(`PRAGMA user_version = ${migration.version};`);
       } else {
+        let startedTx = false;
         try {
-          await db.withTransactionAsync(async () => {
-            await migration.up(db);
-            await db.execAsync(`PRAGMA user_version = ${migration.version};`);
-          });
-        } catch (err: any) {
-          // Fallback para ambientes (ex: Web wa-sqlite) onde o driver já gerencia a transação
-          if (err?.message?.includes('cannot start a transaction within a transaction')) {
-            await migration.up(db);
-            await db.execAsync(`PRAGMA user_version = ${migration.version};`);
-          } else {
-            throw err;
+          await db.execAsync('BEGIN;');
+          startedTx = true;
+        } catch {
+          // Se falhar ao iniciar transação (já ativa ou driver web), executa diretamente
+          startedTx = false;
+        }
+
+        try {
+          await migration.up(db);
+          await db.execAsync(`PRAGMA user_version = ${migration.version};`);
+          if (startedTx) {
+            await db.execAsync('COMMIT;');
           }
+        } catch (taskErr) {
+          if (startedTx) {
+            await db.execAsync('ROLLBACK;').catch(() => {});
+          }
+          throw taskErr;
         }
       }
     }
@@ -237,4 +244,3 @@ export const resetInitDatabaseState = (): void => {
   initPromise = null;
   migrationPromise = null;
 };
-

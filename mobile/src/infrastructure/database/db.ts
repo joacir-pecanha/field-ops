@@ -20,11 +20,18 @@ export const getDatabase = async (): Promise<SQLiteDatabase> => {
       try {
         const { openDatabaseAsync } = await import('expo-sqlite');
         const db = await openDatabaseAsync(DATABASE_NAME);
-        // RT-03: Chaves estrangeiras ativadas obrigatoriamente e WAL para concorrência
-        await db.execAsync(`
-          PRAGMA foreign_keys = ON;
-          PRAGMA journal_mode = WAL;
-        `);
+
+        // RT-03: Chaves estrangeiras ativadas obrigatoriamente
+        await db.execAsync('PRAGMA foreign_keys = ON;');
+
+        // WAL mode é ativado para concorrência em plataformas nativas (Android/iOS).
+        // Em ambientes Web (wa-sqlite), é ignorado caso a VFS não suporte WAL.
+        try {
+          await db.execAsync('PRAGMA journal_mode = WAL;');
+        } catch {
+          // Ignorado com segurança no Web
+        }
+
         dbInstance = db;
         return db;
       } catch (error) {
