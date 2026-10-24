@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-004
 - **Épico / Módulo:** Mobile / Autenticação & Sessão
-- **Status:** IN_PROGRESS
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-10-24
 
 ---
 
@@ -64,7 +64,7 @@ O aplicativo mobile precisa gerenciar a identidade do técnico de campo de forma
 - [x] **CA-02:** Token expirado é renovado silenciosamente e repete a requisição protegida sem intervenção do usuário.
 - [x] **CA-03:** Logout elimina tokens locais e impede retorno a telas protegidas pelo botão voltar.
 - [x] **CA-04:** `npx tsc --noEmit` executa sem erros de tipagem.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
