@@ -3,7 +3,7 @@
 ## 1. Metadados
 - **ID:** TASK-004
 - **Épico / Módulo:** Mobile / Autenticação & Sessão
-- **Status:** APPROVED
+- **Status:** IN_PROGRESS
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md)
