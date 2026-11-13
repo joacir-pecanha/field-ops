@@ -218,6 +218,14 @@
                       {{ template.status === 'DRAFT' ? 'Editar Rascunho' : 'Abrir Construtor' }}
                     </a>
 
+                    <a
+                      [routerLink]="['/app/inspection-templates', template.id, 'preview']"
+                      class="btn btn-secondary btn-sm"
+                      data-testid="open-template-preview-btn"
+                    >
+                      Prévia
+                    </a>
+
                     @if (template.status === 'PUBLISHED') {
                       <button
                         type="button"

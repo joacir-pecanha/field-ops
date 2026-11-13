@@ -122,6 +122,16 @@ export const routes: Routes = [
         title: 'Editor de Modelo — FieldOps Admin',
       },
       {
+        path: 'inspection-templates/:templateId/preview',
+        loadComponent: () =>
+          import('./pages/templates/template-builder.component').then(
+            (m) => m.TemplateBuilderComponent
+          ),
+        canDeactivate: [pendingChangesGuard],
+        data: { roles: ['ADMIN', 'SUPERVISOR'], initialTab: 'preview' },
+        title: 'Prévia do Modelo — FieldOps Admin',
+      },
+      {
         path: 'inspections',
         component: ModulePlaceholderComponent,
         data: {

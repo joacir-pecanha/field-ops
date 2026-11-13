@@ -24,6 +24,12 @@ import { normalizeOptionalText } from '../../core/master/master-data.models';
 import { NotificationService } from '../../core/services/notification.service';
 import { ConfirmModalComponent } from '../../shared/components/confirm-modal/confirm-modal.component';
 import { applyServerFieldErrors, clearServerError } from '../../shared/utils/form-error.utils';
+import { SectionEditorComponent } from './components/section-editor.component';
+import {
+  PreviewTemplateModel,
+  TemplatePreviewComponent,
+} from './components/template-preview.component';
+import { ItemFormGroup, SectionFormGroup } from './template-form.types';
 import {
   RESPONSE_TYPE_OPTIONS,
   ResponseType,
@@ -42,24 +48,7 @@ import {
   getTemplateStatusLabel,
 } from './template.service';
 
-export type ItemFormGroup = FormGroup<{
-  code: FormControl<string>;
-  title: FormControl<string>;
-  description: FormControl<string>;
-  responseType: FormControl<ResponseType | ''>;
-  required: FormControl<boolean>;
-  observationRequiredOnFailure: FormControl<boolean>;
-  evidenceRequiredOnFailure: FormControl<boolean>;
-  options: FormArray<FormControl<string>>;
-  orderIndex: FormControl<number>;
-}>;
-
-export type SectionFormGroup = FormGroup<{
-  title: FormControl<string>;
-  description: FormControl<string>;
-  orderIndex: FormControl<number>;
-  items: FormArray<ItemFormGroup>;
-}>;
+export type { ItemFormGroup, SectionFormGroup };
 
 export const pendingChangesGuard: CanDeactivateFn<TemplateBuilderComponent> = (component) => {
   return component.confirmLeaveIfDirty();
@@ -68,7 +57,14 @@ export const pendingChangesGuard: CanDeactivateFn<TemplateBuilderComponent> = (c
 @Component({
   selector: 'app-template-builder',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, ConfirmModalComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    RouterLink,
+    ConfirmModalComponent,
+    SectionEditorComponent,
+    TemplatePreviewComponent,
+  ],
   templateUrl: './template-builder.component.html',
   styleUrl: './template-builder.component.scss',
 })
@@ -103,6 +99,18 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
 
   readonly publishPendencies = signal<string[]>([]);
   readonly hasUnsavedChanges = signal(false);
+  readonly activeTab = signal<'editor' | 'preview'>('editor');
+  readonly totalSectionsCount = signal(0);
+  readonly totalItemsCount = signal(0);
+  readonly previewModel = signal<PreviewTemplateModel>({
+    code: null,
+    title: '',
+    category: '',
+    description: null,
+    versionLabel: 'Novo Rascunho',
+    statusLabel: 'Rascunho',
+    sections: [],
+  });
 
   readonly selectedSectionGroup = signal<SectionFormGroup | null>(null);
   readonly selectedItemGroup = signal<ItemFormGroup | null>(null);
@@ -131,7 +139,8 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
   });
 
   readonly latestDraftVersion = computed(() => {
-    return this.versions().find((v) => v.status === 'DRAFT') ?? null;
+    const drafts = this.versions().filter((v) => v.status === 'DRAFT');
+    return drafts.length > 0 ? drafts[drafts.length - 1] : null;
   });
 
   readonly viewingHistoricalVersion = computed(() => {
@@ -141,7 +150,11 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
       return false;
     }
     if (template.status === 'DRAFT') {
-      return version.status !== 'DRAFT' || version.versionNumber !== template.version;
+      const latestDraft = this.latestDraftVersion();
+      if (latestDraft) {
+        return version.status !== 'DRAFT' || version.versionNumber !== latestDraft.versionNumber;
+      }
+      return version.status !== 'DRAFT';
     }
     return version.versionNumber !== template.currentVersion;
   });
@@ -168,13 +181,11 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
     return [...TEMPLATE_CATEGORY_OPTIONS, { value: current, label: current }];
   });
 
-  readonly totalSectionsCount = computed(() => this.sectionsArray.length);
-
-  readonly totalItemsCount = computed(() =>
-    this.sectionsArray.controls.reduce((sum, sec) => sum + sec.controls.items.length, 0)
-  );
-
   ngOnInit(): void {
+    if (this.route.snapshot.data?.['initialTab'] === 'preview') {
+      this.activeTab.set('preview');
+    }
+
     this.form.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.recomputeReactiveState();
     });
@@ -188,6 +199,17 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
         this.initNewTemplate();
       }
     });
+  }
+
+  setActiveTab(tab: 'editor' | 'preview'): void {
+    if (tab === 'preview') {
+      this.previewModel.set(this.buildPreviewModel());
+    }
+    this.activeTab.set(tab);
+  }
+
+  onSectionStructureChanged(): void {
+    this.recomputeReactiveState();
   }
 
   ngOnDestroy(): void {
@@ -551,6 +573,8 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
     }
     return id;
   }
+
+  readonly getItemDomIdFn = (item: ItemFormGroup): string => this.getItemDomId(item);
 
   getItemDomId(item: ItemFormGroup): string {
     let id = this.itemDomIds.get(item);
@@ -927,7 +951,13 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
   }
 
   private recomputeReactiveState(): void {
+    this.totalSectionsCount.set(this.sectionsArray.length);
+    this.totalItemsCount.set(
+      this.sectionsArray.controls.reduce((sum, sec) => sum + sec.controls.items.length, 0)
+    );
     this.publishPendencies.set(this.computePublishPendencies());
+    this.previewModel.set(this.buildPreviewModel());
+
     if (!this.isEditable()) {
       this.hasUnsavedChanges.set(false);
       return;
@@ -935,6 +965,37 @@ export class TemplateBuilderComponent implements OnInit, OnDestroy {
     this.hasUnsavedChanges.set(
       this.savedSnapshot !== '' && this.serializeFormSnapshot() !== this.savedSnapshot
     );
+  }
+
+  private buildPreviewModel(): PreviewTemplateModel {
+    const raw = this.form.getRawValue();
+    const tpl = this.loadedTemplate();
+    const selectedVersion = this.selectedVersion();
+    const versionNumber = selectedVersion?.versionNumber ?? tpl?.version ?? 1;
+    const status = selectedVersion?.status ?? tpl?.status ?? 'DRAFT';
+
+    return {
+      code: normalizeOptionalText(raw.code),
+      title: raw.title,
+      category: raw.category,
+      description: normalizeOptionalText(raw.description),
+      versionLabel: tpl ? `v${versionNumber}` : 'Novo Rascunho',
+      statusLabel: getTemplateStatusLabel(status),
+      sections: raw.sections.map((section) => ({
+        title: section.title,
+        description: normalizeOptionalText(section.description),
+        items: section.items.map((item) => ({
+          code: normalizeOptionalText(item.code),
+          title: item.title,
+          description: normalizeOptionalText(item.description),
+          responseType: item.responseType,
+          required: item.required,
+          observationRequiredOnFailure: item.observationRequiredOnFailure,
+          evidenceRequiredOnFailure: item.evidenceRequiredOnFailure,
+          options: [...item.options],
+        })),
+      })),
+    };
   }
 
   private markSnapshotClean(): void {

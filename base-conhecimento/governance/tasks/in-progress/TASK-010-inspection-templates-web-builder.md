@@ -20,9 +20,12 @@ O supervisor necessita de uma ferramenta ágil e intuitiva para criar e manter m
 ## 3. Arquivos Impactados
 - `web/src/app/pages/templates/template-list.component.ts` / `.html` (Listagem de modelos e status da versão)
 - `web/src/app/pages/templates/template-builder.component.ts` / `.html` / `.scss` (Editor de seções e itens)
-- `web/src/app/pages/templates/components/section-editor.component.ts` (Edição de título e ordem da seção — Passo 4+)
-- `web/src/app/pages/templates/components/item-editor.component.ts` (Configuração detalhada de item — Passo 4+)
-- `web/src/app/pages/templates/components/template-preview.component.ts` (Pré-visualização do checklist simulando a tela mobile — Passo 5)
+- `web/src/app/pages/templates/template-form.types.ts` (Tipos tipados de `FormGroup` para seções e itens)
+- `web/src/app/pages/templates/components/section-editor.component.ts` (Edição de título e ordem da seção — Passo 4)
+- `web/src/app/pages/templates/components/item-editor.component.ts` (Configuração detalhada de item — Passo 4)
+- `web/src/app/pages/templates/components/single-choice-options-editor.component.ts` & `.spec.ts` (Subcomponente de opções de escolha única — Passos 4 e 6)
+- `web/src/app/pages/templates/components/non-conformity-rules.component.ts` & `.spec.ts` (Subcomponente de regras de obrigatoriedade e não conformidade — Passos 4 e 6)
+- `web/src/app/pages/templates/components/template-preview.component.ts` & `.spec.ts` (Pré-visualização interativa do checklist simulando a tela mobile — Passos 5 e 6)
 - `web/src/app/pages/templates/template.service.ts` (Serviço HTTP de templates)
 - `web/src/app/pages/templates/template-builder.component.spec.ts` (Testes unitários — Passo 6)
 - `web/src/app/app.routes.ts` (Rotas lazy-loaded e `pendingChangesGuard`)
@@ -54,17 +57,17 @@ O supervisor necessita de uma ferramenta ágil e intuitiva para criar e manter m
 - [x] **Passo 1:** Criar serviço HTTP `template.service.ts` integrado aos endpoints do backend.
 - [x] **Passo 2:** Desenvolver a tela de listagem de templates com filtros por categoria e status.
 - [x] **Passo 3:** Implementar o componente `template-builder` com estrutura em árvore de seções e itens.
-- [ ] **Passo 4:** Criar subcomponentes para configuração de opções de escolha única e regras de não conformidade.
-- [ ] **Passo 5:** Desenvolver o componente `template-preview` simulando a experiência do técnico.
-- [ ] **Passo 6:** Escrever testes de componentes para adição de seções, validações e publicação de versão.
+- [x] **Passo 4:** Criar subcomponentes para configuração de opções de escolha única e regras de não conformidade.
+- [x] **Passo 5:** Desenvolver o componente `template-preview` simulando a experiência do técnico.
+- [x] **Passo 6:** Escrever testes de componentes para adição de seções, validações e publicação de versão.
 
 ---
 
 ## 6. Critérios de Aceitação (Definition of Done)
-- [ ] **CA-01:** Supervisor consegue montar um checklist com 2 seções e múltiplos tipos de respostas.
-- [ ] **CA-02:** O preview exibe os inputs renderizados de acordo com as opções configuradas.
-- [ ] **CA-03:** A tentativa de publicar sem itens exibe mensagem clara de bloqueio.
-- [ ] **CA-04:** Publicação gera nova versão e atualiza o status na listagem.
+- [x] **CA-01:** Supervisor consegue montar um checklist com 2 seções e múltiplos tipos de respostas.
+- [x] **CA-02:** O preview exibe os inputs renderizados de acordo com as opções configuradas.
+- [x] **CA-03:** A tentativa de publicar sem itens exibe mensagem clara de bloqueio.
+- [x] **CA-04:** Publicação gera nova versão e atualiza o status na listagem.
 - [ ] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
@@ -80,3 +83,19 @@ O supervisor necessita de uma ferramenta ágil e intuitiva para criar e manter m
     - `npm --prefix web run build`: aprovado (saída 0; `dist/web` gerado).
     - `npm --prefix web run test:ci`: **62/62 testes aprovados** (Edge Headless, saída 0).
     - `.\backend\mvnw.cmd -f backend\pom.xml clean test -o "-Djava.version=23"`: **24/24 testes aprovados** (`FieldOpsBackendApplicationTests`, `AuthControllerTest`, `MasterDataIntegrationTest`, `TemplateLifecycleTest`, saída 0).
+- **2026-11-13 (Passos 4 a 6 concluídos — aguardando aprovação humana em CA-05):**
+  - **Passo 4 (Subcomponentes de Editor):**
+    - Extraído `web/src/app/pages/templates/template-form.types.ts` com `ItemFormGroup` e `SectionFormGroup` (reexportados em `template-builder.component.ts`).
+    - Criado `SingleChoiceOptionsEditorComponent` (`web/src/app/pages/templates/components/single-choice-options-editor.component.ts`) para gestão de opções de `SINGLE_CHOICE` (par inicial rápido, adição via botão ou tecla Enter, reordenação `↑`/`↓`, remoção, contagem de opções válidas, alerta de duplicidade e validação de opção vazia).
+    - Criado `NonConformityRulesComponent` (`web/src/app/pages/templates/components/non-conformity-rules.component.ts`) para configuração de `required`, `observationRequiredOnFailure` (RN-038) e `evidenceRequiredOnFailure` (RN-039) com badges de resumo e orientação contextual por tipo de resposta.
+    - Criados `ItemEditorComponent` e `SectionEditorComponent` compondo os subcomponentes no fluxo de `TemplateBuilderComponent`.
+  - **Passo 5 (`TemplatePreviewComponent` e rota de prévia):**
+    - Criado `web/src/app/pages/templates/components/template-preview.component.ts` simulando a tela mobile do técnico (viewport `Mobile (390px)` / `Expandido`, barra de progresso dinâmica, renderização interativa dos 8 `ResponseType` + fallback controlado, ativação de painel de não conformidade com observação e evidência fotográfica simulada obrigatórias quando configurado, e botão **Simular Conclusão da Inspeção** validando pendências).
+    - Integradas abas **Editor de Estrutura** / **Prévia do Checklist (Mobile)** no `TemplateBuilderComponent` mantendo estado vivo do formulário não salvo, além da rota `/app/inspection-templates/:templateId/preview` em `web/src/app/app.routes.ts` e atalho **Prévia** em `web/src/app/pages/templates/template-list.component.html`.
+    - Corrigida atualização reativa de `totalSectionsCount` e `totalItemsCount` no `TemplateBuilderComponent` usando `signal` atualizado em `recomputeReactiveState()`.
+  - **Passo 6 (Testes de componentes):**
+    - Criados `template-builder.component.spec.ts`, `single-choice-options-editor.component.spec.ts`, `non-conformity-rules.component.spec.ts` e `template-preview.component.spec.ts` cobrindo adição/reordenação de seções e itens, opções de escolha única, regras de não conformidade, preview dos 8 tipos, bloqueio de publicação inválida (local e HTTP 400), publicação com modal de confirmação, criação de nova versão em modelo publicado (`EX-02`) e guarda de alterações não salvas (`EX-01`).
+  - **Evidências de verificação:**
+    - `npm --prefix web run typecheck`: aprovado (saída 0).
+    - `npm --prefix web run build`: aprovado (saída 0; `dist/web` gerado).
+    - `npm --prefix web run test:ci`: **76/76 testes aprovados** (Edge Headless, saída 0).
