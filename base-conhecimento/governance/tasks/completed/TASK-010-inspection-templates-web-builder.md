@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-010
 - **Épico / Módulo:** Web Admin / Modelos de Inspeção
-- **Status:** IN_PROGRESS
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-13
 
 ---
 
@@ -68,7 +68,7 @@ O supervisor necessita de uma ferramenta ágil e intuitiva para criar e manter m
 - [x] **CA-02:** O preview exibe os inputs renderizados de acordo com as opções configuradas.
 - [x] **CA-03:** A tentativa de publicar sem itens exibe mensagem clara de bloqueio.
 - [x] **CA-04:** Publicação gera nova versão e atualiza o status na listagem.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
@@ -99,3 +99,7 @@ O supervisor necessita de uma ferramenta ágil e intuitiva para criar e manter m
     - `npm --prefix web run typecheck`: aprovado (saída 0).
     - `npm --prefix web run build`: aprovado (saída 0; `dist/web` gerado).
     - `npm --prefix web run test:ci`: **76/76 testes aprovados** (Edge Headless, saída 0).
+- **2026-11-13 (Correção pós-validação humana e Conclusão):**
+  - Corrigida lógica de `viewingHistoricalVersion()` em `web/src/app/pages/templates/template-builder.component.ts` para comparar com `latestDraftVersion()` quando o modelo está em `DRAFT` (evitando bloqueio somente leitura em rascunhos iniciais onde `template.version === 0` e a versão rascunho é `v1`).
+  - Adicionado teste de regressão em `web/src/app/pages/templates/template-builder.component.spec.ts` e validado via `npm --prefix web run typecheck` e `npm --prefix web run test:ci` (**77/77 testes aprovados**, saída 0).
+  - Validação humana concluída e aprovada por **Joacir Peçanha** (`CA-05`); task marcada como `COMPLETED` e movida para `base-conhecimento/governance/tasks/completed/`.
