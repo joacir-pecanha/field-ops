@@ -9,6 +9,7 @@ Plataforma integrada **Offline-First** para planejamento, execução em campo, s
 ```text
 field-ops/
 ├── backend/             # API REST (Java 26 + Spring Boot 4.1.2 + PostgreSQL + Flyway)
+├── web/                 # Interface Administrativa Web (Angular 20 + TypeScript)
 ├── mobile/              # Aplicativo Mobile Offline-First (Expo v57 + React Native + SQLite)
 ├── docs/                # Documentação funcional, regras de negócio, arquitetura e modelo de dados
 └── base-conhecimento/   # Governança Spec-Driven Development (SDD), specs e tasks
@@ -22,6 +23,9 @@ field-ops/
 - **Java JDK 26** instalado e configurado no `PATH` (`java -version`).
 - **PostgreSQL** em execução (local ou via Docker).
 - *(Não é necessário instalar o Maven globalmente; o projeto inclui o Maven Wrapper `mvnw` / `mvnw.cmd`).*
+
+### Para a Interface Administrativa Web (`web/`)
+- **Node.js** (v20.19+ / v22.12+ / v24+ recomendado) e **npm**.
 
 ### Para o Mobile (`mobile/`)
 - **Node.js** (v20+ recomendado) e **npm**.
@@ -57,7 +61,26 @@ A API ficará disponível por padrão em `http://localhost:8080`.
 
 ---
 
-## 2. Como Rodar o Aplicativo Mobile (`mobile`)
+## 2. Como Rodar a Interface Administrativa Web (`web`)
+
+1. Acesse a pasta da interface web e instale as dependências:
+   ```bash
+   cd web
+   npm install
+   ```
+
+2. Verifique a URL da API em [`web/src/environments/environment.ts`](web/src/environments/environment.ts) (padrão: `http://localhost:8080`).
+
+3. Inicie o servidor de desenvolvimento do Angular:
+   ```bash
+   npm start
+   ```
+
+A interface administrativa ficará disponível por padrão em `http://localhost:4200`.
+
+---
+
+## 3. Como Rodar o Aplicativo Mobile (`mobile`)
 
 1. Acesse a pasta do aplicativo mobile e instale as dependências:
    ```bash
@@ -72,7 +95,7 @@ A API ficará disponível por padrão em `http://localhost:8080`.
 
 ---
 
-## 3. Como Rodar e Conectar o Mobile e o Backend em Outro Dispositivo
+## 4. Como Rodar e Conectar o Mobile e o Backend em Outro Dispositivo
 
 Quando o aplicativo mobile roda em um **celular físico** ou em **outro computador/dispositivo**, o endereço `http://localhost:8080` **não** aponta para a máquina onde o backend está rodando (pois `localhost` refere-se ao próprio dispositivo).
 
@@ -140,9 +163,9 @@ EXPO_PUBLIC_API_URL=http://192.168.1.100:8080
 
 ---
 
-## 4. Executando o Projeto Completo em um Novo Computador
+## 5. Executando o Projeto Completo em um Novo Computador
 
-Caso queira clonar e rodar todo o ambiente (Mobile + Backend) em outra máquina do zero:
+Caso queira clonar e rodar todo o ambiente (Backend + Web Admin + Mobile) em outra máquina do zero:
 
 ```bash
 # 1. Clonar o repositório
@@ -153,7 +176,12 @@ cd field-ops
 cd backend
 ./mvnw spring-boot:run        # No Windows: .\mvnw.cmd spring-boot:run
 
-# 3. Subir o Mobile (Terminal 2)
+# 3. Subir a Interface Administrativa Web (Terminal 2)
+cd ../web
+npm install
+npm start
+
+# 4. Subir o Mobile (Terminal 3)
 cd ../mobile
 npm install
 npx expo start
@@ -161,12 +189,19 @@ npx expo start
 
 ---
 
-## 5. Executando os Testes
+## 6. Executando os Testes
 
 - **Backend (JUnit 5 / Spring Boot Test):**
   ```powershell
   cd backend
   .\mvnw.cmd test
+  ```
+- **Web Admin (Angular + Karma/Jasmine + TypeScript):**
+  ```bash
+  cd web
+  npm run typecheck
+  npm run test:ci
+  npm run build
   ```
 - **Mobile (Node Test Runner + TypeScript):**
   ```bash
