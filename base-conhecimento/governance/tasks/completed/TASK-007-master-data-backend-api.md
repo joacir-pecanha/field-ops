@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-007
 - **Épico / Módulo:** Backend API / Cadastros Mestres
-- **Status:** IN_REVIEW
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/modelo-de-dados.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/modelo-de-dados.md), [docs/regras-de-negocio.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/regras-de-negocio.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-13
 
 ---
 
@@ -66,7 +66,7 @@ Para viabilizar as inspeções de campo, o sistema depende de dados cadastrais o
 - [x] **CA-02:** Tentativa de duplicar QR Code de equipamento falha com código 409.
 - [x] **CA-03:** A inativação lógica preserva a entidade no banco mantendo integridade com inspeções existentes.
 - [x] **CA-04:** Endpoints documentados no Swagger UI sem erros de serialização.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 

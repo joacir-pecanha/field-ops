@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-005
 - **Épico / Módulo:** Backend API / Autenticação & Segurança
-- **Status:** IN_PROGRESS
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/arquitetura.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/arquitetura.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-13
 
 ---
 
@@ -63,7 +63,7 @@ A API REST em Spring Boot é o ponto centralizador da segurança da plataforma F
 - [x] **CA-02:** Requisição a rotas protegidas sem Bearer token retorna 401 Unauthorized.
 - [x] **CA-03:** Técnico não consegue acessar endpoints com role `ADMIN` ou `SUPERVISOR` (retorna 403 Forbidden).
 - [x] **CA-04:** Suíte de testes unitários e de integração passa com 100% de sucesso.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
