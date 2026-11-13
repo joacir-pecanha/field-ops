@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-009
 - **Épico / Módulo:** Backend API / Modelos de Inspeção
-- **Status:** IN_REVIEW
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/modelo-de-dados.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/modelo-de-dados.md), [docs/regras-de-negocio.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/regras-de-negocio.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-13
 
 ---
 
@@ -65,7 +65,7 @@ Os modelos de checklist são a espinha dorsal da padronização operacional do F
 - [x] **CA-02:** Uma versão publicada rejeita modificações diretas em seus itens.
 - [x] **CA-03:** Ao editar uma versão publicada, uma nova versão é iniciada mantendo a anterior inalterada.
 - [x] **CA-04:** Todos os 7 tipos de resposta obrigatórios são aceitos e validados.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
