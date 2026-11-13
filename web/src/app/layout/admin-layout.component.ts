@@ -32,6 +32,12 @@ const NAV_ITEMS: readonly NavItem[] = [
     roles: ['ADMIN', 'SUPERVISOR'],
     shortTag: 'NC',
   },
+  {
+    label: 'Swagger / API',
+    route: '/app/api-docs',
+    roles: ['ADMIN', 'SUPERVISOR'],
+    shortTag: 'SW',
+  },
 ];
 
 @Component({

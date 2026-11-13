@@ -7,6 +7,11 @@ import com.fieldops.modules.auth.dto.RefreshTokenRequest;
 import com.fieldops.modules.auth.dto.UserProfileDto;
 import com.fieldops.modules.auth.service.AuthService;
 import com.fieldops.security.jwt.AuthenticatedUser;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -35,6 +40,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/auth")
+@Tag(name = "00. Autenticação & Sessão", description = "Login JWT, renovação via Refresh Token, logout e consulta de perfil autenticado")
 public class AuthController {
 
     private final AuthService authService;
@@ -47,6 +53,14 @@ public class AuthController {
      * Endpoint de autenticação por e-mail e senha (RF-01, RF-02, RF-03, CA-01).
      */
     @PostMapping("/login")
+    @SecurityRequirements
+    @Operation(summary = "Autenticar usuário", description = "Valida credenciais e retorna Access Token JWT + Refresh Token.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Autenticação realizada com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Payload inválido"),
+        @ApiResponse(responseCode = "401", description = "Credenciais inválidas"),
+        @ApiResponse(responseCode = "403", description = "Usuário inativo ou bloqueado")
+    })
     public ResponseEntity<AuthResponse> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest servletRequest
@@ -61,6 +75,12 @@ public class AuthController {
      * Endpoint de renovação de sessão via Refresh Token com rotação automática (RF-03, EX-02).
      */
     @PostMapping("/refresh")
+    @SecurityRequirements
+    @Operation(summary = "Renovar sessão JWT", description = "Emite novo par de tokens rotacionando o Refresh Token válido.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Sessão renovada com sucesso"),
+        @ApiResponse(responseCode = "401", description = "Refresh token inválido, expirado ou revogado")
+    })
     public ResponseEntity<AuthResponse> refresh(
             @Valid @RequestBody RefreshTokenRequest request,
             HttpServletRequest servletRequest
@@ -75,6 +95,9 @@ public class AuthController {
      * Endpoint de encerramento explícito de sessão e revogação do Refresh Token (RF-05, AC-AUTH).
      */
     @PostMapping("/logout")
+    @SecurityRequirements
+    @Operation(summary = "Encerrar sessão", description = "Revoga o Refresh Token informado e encerra a sessão atual.")
+    @ApiResponse(responseCode = "204", description = "Sessão encerrada com sucesso")
     public ResponseEntity<Void> logout(
             @RequestBody(required = false) LogoutRequest request
     ) {
@@ -88,6 +111,11 @@ public class AuthController {
      */
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Consultar perfil atual", description = "Retorna os dados públicos do usuário autenticado via Bearer JWT.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Perfil retornado com sucesso"),
+        @ApiResponse(responseCode = "401", description = "Token ausente ou inválido")
+    })
     public ResponseEntity<UserProfileDto> me() {
         UUID authenticatedUserId = extractAuthenticatedUserId();
         UserProfileDto profile = authService.getCurrentUserProfile(authenticatedUserId);
@@ -100,6 +128,11 @@ public class AuthController {
      */
     @PostMapping("/sessions/{userId}/revoke")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @Operation(summary = "Revogar sessões de um usuário", description = "Restrito aos perfis ADMIN e SUPERVISOR.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Sessões revogadas com sucesso"),
+        @ApiResponse(responseCode = "403", description = "Permissão insuficiente")
+    })
     public ResponseEntity<Void> revokeUserSessions(@PathVariable("userId") UUID userId) {
         authService.revokeAllUserSessions(userId);
         return ResponseEntity.noContent().build();

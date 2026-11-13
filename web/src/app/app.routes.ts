@@ -38,43 +38,58 @@ export const routes: Routes = [
       },
       {
         path: 'users',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN'],
-          title: 'Usuários e Perfis',
-          description: 'Gerenciamento de usuários, perfis e status de acesso (TASK-008).',
-        },
+        loadComponent: () =>
+          import('./pages/users/users-list.component').then((m) => m.UsersListComponent),
+        data: { roles: ['ADMIN'] },
         title: 'Usuários — FieldOps Admin',
       },
       {
         path: 'clients',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN', 'SUPERVISOR'],
-          title: 'Clientes',
-          description: 'Cadastro e consulta de clientes corporativos (TASK-008).',
-        },
+        loadComponent: () =>
+          import('./pages/clients/clients-list.component').then((m) => m.ClientsListComponent),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
         title: 'Clientes — FieldOps Admin',
       },
       {
+        path: 'clients/:clientId/sites',
+        loadComponent: () =>
+          import('./pages/sites/sites-list.component').then((m) => m.SitesListComponent),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Locais do Cliente — FieldOps Admin',
+      },
+      {
         path: 'sites',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN', 'SUPERVISOR'],
-          title: 'Locais',
-          description: 'Unidades e endereços vinculados aos clientes (TASK-008).',
-        },
+        loadComponent: () =>
+          import('./pages/sites/sites-list.component').then((m) => m.SitesListComponent),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
         title: 'Locais — FieldOps Admin',
       },
       {
+        path: 'sites/:siteId/equipment',
+        loadComponent: () =>
+          import('./pages/equipment/equipment-list.component').then(
+            (m) => m.EquipmentListComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Equipamentos do Local — FieldOps Admin',
+      },
+      {
         path: 'equipment',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN', 'SUPERVISOR'],
-          title: 'Equipamentos',
-          description: 'Parque de equipamentos e emissão de QR Codes (TASK-008).',
-        },
+        loadComponent: () =>
+          import('./pages/equipment/equipment-list.component').then(
+            (m) => m.EquipmentListComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
         title: 'Equipamentos — FieldOps Admin',
+      },
+      {
+        path: 'api-docs',
+        loadComponent: () =>
+          import('./pages/api-docs/api-docs-validation.component').then(
+            (m) => m.ApiDocsValidationComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Swagger & API — FieldOps Admin',
       },
       {
         path: 'inspection-templates',

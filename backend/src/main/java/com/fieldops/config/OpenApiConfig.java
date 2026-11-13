@@ -23,7 +23,14 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("FieldOps API")
                         .version("v1")
-                        .description("API REST da plataforma FieldOps para autenticação, cadastros mestres e gestão de inspeções.")
+                        .description("""
+                                API REST da plataforma FieldOps para autenticação, cadastros mestres e gestão de inspeções.
+
+                                Como validar os endpoints no Swagger UI:
+                                1. Execute `POST /api/v1/auth/login` (ex.: `admin@fieldops.com` / `FieldOps@123`) ou copie o Access Token pela tela `Swagger / API` da interface web.
+                                2. Clique no botão **Authorize** acima e informe apenas o token JWT obtido.
+                                3. Teste os endpoints paginados de **Usuários** (`/api/v1/users`), **Clientes** (`/api/v1/clients`), **Locais de Inspeção** (`/api/v1/sites`) e **Equipamentos** (`/api/v1/equipments` e `/api/v1/equipments/qr/{qrCode}`).
+                                """)
                         .contact(new Contact().name("FieldOps Team")))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH_SCHEME))
                 .components(new Components()

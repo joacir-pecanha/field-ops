@@ -141,6 +141,23 @@
   letter-spacing: 0.05em;
 }
 
+.swagger-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-decoration: none;
+
+  &:hover {
+    background: #dbeafe;
+  }
+}
+
 .topbar-right {
   display: flex;
   align-items: center;
