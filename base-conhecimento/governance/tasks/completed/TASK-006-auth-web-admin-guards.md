@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-006
 - **Épico / Módulo:** Web Admin / Autenticação & Sessão
-- **Status:** IN_REVIEW
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-13
 
 ---
 
@@ -63,7 +63,7 @@ A interface administrativa web é a porta de entrada para administradores e supe
 - [x] **CA-02:** Login válido navega para a página inicial da área administrativa com o nome do usuário exibido no header.
 - [x] **CA-03:** Logout desconecta o usuário e limpa o storage local do navegador.
 - [x] **CA-04:** Testes unitários com Karma/Jest passam sem falhas.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
