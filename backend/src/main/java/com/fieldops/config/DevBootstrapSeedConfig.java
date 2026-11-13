@@ -12,6 +12,13 @@ import com.fieldops.modules.master.repository.ClientRepository;
 import com.fieldops.modules.master.repository.EquipmentRepository;
 import com.fieldops.modules.master.repository.SiteRepository;
 import com.fieldops.modules.master.repository.UserRepository;
+import com.fieldops.modules.template.domain.ResponseType;
+import com.fieldops.modules.template.dto.TemplateItemRequest;
+import com.fieldops.modules.template.dto.TemplateRequest;
+import com.fieldops.modules.template.dto.TemplateResponse;
+import com.fieldops.modules.template.dto.TemplateSectionRequest;
+import com.fieldops.modules.template.repository.InspectionTemplateRepository;
+import com.fieldops.modules.template.service.TemplateService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -23,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -41,15 +49,20 @@ public class DevBootstrapSeedConfig {
             ClientRepository clientRepository,
             SiteRepository siteRepository,
             EquipmentRepository equipmentRepository,
+            InspectionTemplateRepository templateRepository,
+            TemplateService templateService,
             PasswordEncoder passwordEncoder
     ) {
-        return args -> seedInitialData(
-                userRepository,
-                clientRepository,
-                siteRepository,
-                equipmentRepository,
-                passwordEncoder
-        );
+        return args -> {
+            seedInitialData(
+                    userRepository,
+                    clientRepository,
+                    siteRepository,
+                    equipmentRepository,
+                    passwordEncoder
+            );
+            seedInitialTemplates(userRepository, templateRepository, templateService);
+        };
     }
 
     @Transactional
@@ -234,6 +247,188 @@ public class DevBootstrapSeedConfig {
         equipment.setStatus(EquipmentStatus.ACTIVE);
         equipment.setInstalledAt(installedAt);
         equipmentRepository.save(equipment);
+    }
+
+    private void seedInitialTemplates(
+            UserRepository userRepository,
+            InspectionTemplateRepository templateRepository,
+            TemplateService templateService
+    ) {
+        if (templateRepository.count() > 0) {
+            return;
+        }
+
+        UUID supervisorId = userRepository.findByEmailIgnoreCase("supervisor@fieldops.com")
+                .map(User::getId)
+                .orElse(null);
+
+        TemplateResponse publishedTemplate = templateService.createDraft(
+                new TemplateRequest(
+                        "TPL-GER-01",
+                        "Checklist Preventivo de Gerador Diesel",
+                        "Inspeção periódica de segurança, partida, níveis de fluidos e painel elétrico de grupos geradores.",
+                        "MECANICA",
+                        List.of(
+                                new TemplateSectionRequest(
+                                        "Inspeção Visual e Segurança",
+                                        "Verificações iniciais antes da partida.",
+                                        0,
+                                        List.of(
+                                                new TemplateItemRequest(
+                                                        "GER-01",
+                                                        "Lacre e integridade externa do equipamento",
+                                                        "Confirmar ausência de avarias na carenagem.",
+                                                        ResponseType.CONFORMITY,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        null,
+                                                        null,
+                                                        0
+                                                ),
+                                                new TemplateItemRequest(
+                                                        "GER-02",
+                                                        "Área ao redor livre de vazamentos de óleo ou combustível?",
+                                                        null,
+                                                        ResponseType.BOOLEAN,
+                                                        true,
+                                                        false,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        1
+                                                ),
+                                                new TemplateItemRequest(
+                                                        "GER-03",
+                                                        "Modo de operação selecionado no painel",
+                                                        null,
+                                                        ResponseType.SINGLE_CHOICE,
+                                                        true,
+                                                        false,
+                                                        false,
+                                                        List.of("Automático", "Manual", "Desligado"),
+                                                        null,
+                                                        2
+                                                )
+                                        )
+                                ),
+                                new TemplateSectionRequest(
+                                        "Medições e Evidências",
+                                        "Leituras operacionais e registros obrigatórios.",
+                                        1,
+                                        List.of(
+                                                new TemplateItemRequest(
+                                                        "GER-04",
+                                                        "Horímetro atual (horas)",
+                                                        null,
+                                                        ResponseType.NUMBER,
+                                                        true,
+                                                        false,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        0
+                                                ),
+                                                new TemplateItemRequest(
+                                                        "GER-05",
+                                                        "Data da última troca de óleo",
+                                                        null,
+                                                        ResponseType.DATE,
+                                                        false,
+                                                        false,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        1
+                                                ),
+                                                new TemplateItemRequest(
+                                                        "GER-06",
+                                                        "Foto frontal do painel de controle",
+                                                        null,
+                                                        ResponseType.PHOTO,
+                                                        true,
+                                                        false,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        2
+                                                ),
+                                                new TemplateItemRequest(
+                                                        "GER-07",
+                                                        "Responsável local acompanhante",
+                                                        null,
+                                                        ResponseType.TEXT_SHORT,
+                                                        false,
+                                                        false,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        3
+                                                ),
+                                                new TemplateItemRequest(
+                                                        "GER-08",
+                                                        "Observações gerais de campo",
+                                                        null,
+                                                        ResponseType.TEXT_LONG,
+                                                        false,
+                                                        false,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        4
+                                                )
+                                        )
+                                )
+                        )
+                ),
+                supervisorId
+        );
+        templateService.publish(publishedTemplate.id(), supervisorId);
+
+        templateService.createDraft(
+                new TemplateRequest(
+                        "TPL-SUB-02",
+                        "Inspeção de Subestação e Transformadores",
+                        "Rascunho inicial para validação de transformadores, proteção e aterramento.",
+                        "ELETRICA",
+                        List.of(
+                                new TemplateSectionRequest(
+                                        "Proteção e Aterramento",
+                                        "Itens em definição pelo supervisor.",
+                                        0,
+                                        List.of(
+                                                new TemplateItemRequest(
+                                                        "SUB-01",
+                                                        "Malha de aterramento e conexões sem oxidação",
+                                                        null,
+                                                        ResponseType.CONFORMITY,
+                                                        true,
+                                                        true,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        0
+                                                ),
+                                                new TemplateItemRequest(
+                                                        "SUB-02",
+                                                        "Temperatura do óleo isolante (°C)",
+                                                        "Selecione o tipo Número antes de publicar.",
+                                                        null,
+                                                        true,
+                                                        false,
+                                                        false,
+                                                        null,
+                                                        null,
+                                                        1
+                                                )
+                                        )
+                                )
+                        )
+                ),
+                supervisorId
+        );
+
+        log.info("Massa inicial de modelos de inspeção (1 publicado e 1 rascunho) populada para validação.");
     }
 }
 
