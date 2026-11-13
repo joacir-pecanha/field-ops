@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-008
 - **Épico / Módulo:** Web Admin / Cadastros Mestres
-- **Status:** IN_REVIEW
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/mobile/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/mobile/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente (Aguardando aprovação final de Joacir Peçanha — CA-05)
+- **Data de Conclusão:** 2026-11-13
 
 ---
 
@@ -76,7 +76,7 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
 - [x] **CA-02:** Seleção de Local filtra automaticamente apenas os equipamentos vinculados a ele. *(Filtro encadeado entregue no Passo 3)*
 - [x] **CA-03:** O QR Code gerado pode ser visualizado e impresso em alta definição.
 - [x] **CA-04:** Nenhuma ação crítica de inativação ocorre sem diálogo de confirmação.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
@@ -141,3 +141,6 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
     - `npm --prefix web run build` -> saída 0 (bundle completo; `Initial total: 392.69 kB`).
     - `npm --prefix web run test:ci` -> saída 0 (`TOTAL: 62 SUCCESS` no Karma/Edge Headless; 62/62 executados com 0 falhas e 0 ignorados).
   - Status atualizado para `IN_REVIEW`, aguardando aprovação final (`CA-05`) do responsável humano.
+- **2026-11-13 — Aprovação Final & Encerramento (Joacir Peçanha):**
+  - Validação final aprovada pelo responsável humano (`CA-05` concluído).
+  - Status atualizado para `COMPLETED`, data de conclusão registrada em `2026-11-13` e arquivo movido de `base-conhecimento/governance/tasks/in-progress/` para `base-conhecimento/governance/tasks/completed/`.
