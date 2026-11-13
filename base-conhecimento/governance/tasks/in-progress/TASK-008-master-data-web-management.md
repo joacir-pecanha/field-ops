@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-008
 - **Épico / Módulo:** Web Admin / Cadastros Mestres
-- **Status:** IN_PROGRESS
+- **Status:** IN_REVIEW
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/mobile/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/mobile/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente (Checkpoint Passos 4 e 5 aguardando validação humana)
+- **Data de Conclusão:** Pendente (Aguardando aprovação final de Joacir Peçanha — CA-05)
 
 ---
 
@@ -26,11 +26,11 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
 - `web/src/app/core/master/master-async.validators.ts` (Validadores assíncronos de unicidade)
 - `web/src/app/core/master/master-data.services.spec.ts` (Testes unitários dos serviços HTTP e mapeamento 409)
 - `web/src/app/pages/api-docs/api-docs-validation.component.ts` (Interface Swagger UI & Console de testes dos endpoints)
-- `web/src/app/pages/users/users-list.component.ts` / `.html` (Gestão de usuários e perfis)
-- `web/src/app/pages/clients/clients-list.component.ts` / `.html` (Listagem e cadastro de clientes)
-- `web/src/app/pages/sites/sites-list.component.ts` / `.html` (Listagem e cadastro de locais)
-- `web/src/app/pages/equipment/equipment-list.component.ts` / `.html` (Gestão de equipamentos)
-- `web/src/app/shared/components/pagination/pagination.component.ts` (Componente de paginação)
+- `web/src/app/pages/users/users-list.component.ts` / `.html` / `.spec.ts` (Gestão de usuários, perfis e testes de componente)
+- `web/src/app/pages/clients/clients-list.component.ts` / `.html` / `.spec.ts` (Listagem, cadastro de clientes e testes de componente)
+- `web/src/app/pages/sites/sites-list.component.ts` / `.html` / `.spec.ts` (Listagem, cadastro de locais e testes de componente)
+- `web/src/app/pages/equipment/equipment-list.component.ts` / `.html` / `.spec.ts` (Gestão de equipamentos e testes de componente)
+- `web/src/app/shared/components/pagination/pagination.component.ts` / `.spec.ts` (Componente de paginação e testes de componente)
 - `web/src/app/shared/styles/master-crud.scss` & `web/src/app/shared/utils/form-error.utils.ts` (Estilos compartilhados e utilitários de formulário)
 - `web/src/app/pages/equipment/components/qr-code-modal.component.ts` *(Passo 4 — Modal QR Code Canvas HD / SVG / PNG / Impressão)*
 - `web/src/app/pages/equipment/components/qr-code-modal.component.spec.ts` *(Testes unitários do componente de QR Code)*
@@ -67,7 +67,7 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
 - [x] **Passo 3:** Desenvolver formulários reativos para criação e edição com validações assíncronas.
 - [x] **Passo 4:** Implementar componente de geração de QR Code usando biblioteca de renderização em Canvas/SVG (ex: `qrcode`).
 - [x] **Passo 5:** Integrar modais de confirmação para ações críticas de inativação.
-- [ ] **Passo 6:** Escrever testes de componentes para as telas de listagem e formulários. *(Aguardando validação humana dos Passos 4–5)*
+- [x] **Passo 6:** Escrever testes de componentes para as telas de listagem e formulários.
 
 ---
 
@@ -129,3 +129,15 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
     1. Acessar **Equipamentos** (`/app/equipment`), clicar no chip do QR Code ou no botão **QR Code** de um item (ou preencher um QR Code no formulário e clicar em **Visualizar QR**), alternar entre **Canvas HD** e **SVG Vetorial** e testar **Copiar Código**, **Baixar SVG**, **Baixar PNG HD** e **Imprimir Etiqueta**.
     2. Em **Clientes**, **Locais**, **Equipamentos** e **Usuários**, testar o fluxo de **Inativar** (na linha da tabela e alterando a situação no formulário de edição), verificando o bloqueio da confirmação adicional em Clientes (`EX-01`) e a ação **Reativar**.
     3. Após sua aprovação destes fluxos visuais, seguiremos para o **Passo 6** (testes unitários completos das telas de listagem e formulários) e encerramento da `TASK-008`.
+- **2026-11-13 — Validação Humana dos Passos 4 e 5 aprovada; Passo 6 concluído:**
+  - Adicionadas suítes de testes unitários de componentes para todas as telas de listagem/formulários reativos e componente de paginação (+21 testes):
+    - `web/src/app/shared/components/pagination/pagination.component.spec.ts` (5 testes): resumo de faixa/contagem, estado vazio, navegação (`pageChange`), bloqueios de limite/`disabled` e alteração de tamanho (`sizeChange`).
+    - `web/src/app/pages/clients/clients-list.component.spec.ts` (4 testes): listagem paginada/filtros/ordenação/estado vazio, validações síncronas e assíncronas (`uniqueClientCodeValidator`), mapeamento HTTP 409 (`DUPLICATE_CLIENT_CODE`) e confirmação crítica `EX-01` na inativação via tabela e edição.
+    - `web/src/app/pages/sites/sites-list.component.spec.ts` (4 testes): filtro por rota `clientId` e exibição restrita a clientes ativos (`RN-009`), validação de UF/CEP/coordenadas e código único por cliente, erro `INACTIVE_CLIENT` em `clientId`, e consulta de equipamentos ativos antes da inativação.
+    - `web/src/app/pages/equipment/equipment-list.component.spec.ts` (5 testes): filtro cascata cliente -> local, carregamento restrito a locais ativos no formulário (`RN-010`, `RN-014`), detecção visual `EX-02` de colisão de QR Code (assíncrona e HTTP 409), pré-visualização/modal de QR Code (`RF-04`) e confirmação de inativação/descomissionamento.
+    - `web/src/app/pages/users/users-list.component.spec.ts` (3 testes): listagem/filtros/ordenação, obrigatoriedade de senha na criação vs. opcional na edição com validação assíncrona de e-mail único, erro `DUPLICATE_EMAIL` 409 e confirmação de inativação/bloqueio.
+  - **Evidências de verificação (`2026-11-13`):**
+    - `npm --prefix web run typecheck` -> saída 0 (`tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit`).
+    - `npm --prefix web run build` -> saída 0 (bundle completo; `Initial total: 392.69 kB`).
+    - `npm --prefix web run test:ci` -> saída 0 (`TOTAL: 62 SUCCESS` no Karma/Edge Headless; 62/62 executados com 0 falhas e 0 ignorados).
+  - Status atualizado para `IN_REVIEW`, aguardando aprovação final (`CA-05`) do responsável humano.
