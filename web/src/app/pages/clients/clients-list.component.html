@@ -1,0 +1,360 @@
+<section class="master-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Clientes</h1>
+      <p>Cadastre e consulte clientes corporativos e acesse rapidamente suas unidades/locais.</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn btn-primary" (click)="openCreateForm()" data-testid="new-client-btn">
+        + Novo Cliente
+      </button>
+    </div>
+  </header>
+
+  @if (formOpen()) {
+    <article class="form-drawer-card" data-testid="client-form-card">
+      <div class="form-header">
+        <div>
+          <h2>{{ editingClient() ? 'Editar Cliente' : 'Novo Cliente' }}</h2>
+          <p>Informe os dados cadastrais. O código interno, quando informado, é validado em tempo real.</p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="closeForm()">Fechar</button>
+      </div>
+
+      @if (formError()) {
+        <div class="alert-banner alert-error" role="alert">
+          <div>
+            <strong>Não foi possível salvar o cliente</strong>
+            <p>{{ formError() }}</p>
+          </div>
+        </div>
+      }
+
+      <form class="reactive-form" [formGroup]="form" (ngSubmit)="submitForm()" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="client-code">Código interno</label>
+            <input
+              id="client-code"
+              type="text"
+              formControlName="code"
+              placeholder="Ex.: CLI-001"
+              [class.input-invalid]="invalid('code')"
+              (input)="onFieldInput('code')"
+            />
+            @if (form.controls.code.pending) {
+              <span class="field-checking">Verificando unicidade do código...</span>
+            } @else if (invalid('code')) {
+              <span class="field-error">
+                @if (form.controls.code.hasError('minlength') || form.controls.code.hasError('maxlength')) {
+                  O código deve ter entre 2 e 50 caracteres.
+                } @else if (form.controls.code.hasError('pattern')) {
+                  Aceita apenas letras, números, ponto, hífen e sublinhado.
+                } @else if (form.controls.code.hasError('codeTaken')) {
+                  Já existe um cliente cadastrado com este código.
+                } @else if (form.controls.code.hasError('serverError')) {
+                  {{ form.controls.code.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="client-name">Nome de exibição *</label>
+            <input
+              id="client-name"
+              type="text"
+              formControlName="name"
+              placeholder="Ex.: Indústria Alfa"
+              [class.input-invalid]="invalid('name')"
+              (input)="onFieldInput('name')"
+            />
+            @if (invalid('name')) {
+              <span class="field-error">
+                @if (form.controls.name.hasError('required')) {
+                  O nome do cliente é obrigatório.
+                } @else if (form.controls.name.hasError('minlength') || form.controls.name.hasError('maxlength')) {
+                  Informe entre 2 e 150 caracteres.
+                } @else if (form.controls.name.hasError('serverError')) {
+                  {{ form.controls.name.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="client-legal-name">Razão social</label>
+            <input
+              id="client-legal-name"
+              type="text"
+              formControlName="legalName"
+              placeholder="Ex.: Indústria Alfa S.A."
+              [class.input-invalid]="invalid('legalName')"
+              (input)="onFieldInput('legalName')"
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="client-document">CPF ou CNPJ</label>
+            <input
+              id="client-document"
+              type="text"
+              formControlName="document"
+              placeholder="12.345.678/0001-90"
+              [class.input-invalid]="invalid('document')"
+              (input)="onFieldInput('document')"
+            />
+            @if (invalid('document')) {
+              <span class="field-error">
+                @if (form.controls.document.hasError('pattern')) {
+                  Formato inválido. Use dígitos, pontos, barra ou hífen (11 a 20 caracteres).
+                } @else if (form.controls.document.hasError('serverError')) {
+                  {{ form.controls.document.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="client-email">E-mail de contato</label>
+            <input
+              id="client-email"
+              type="email"
+              formControlName="email"
+              placeholder="contato@empresa.com.br"
+              [class.input-invalid]="invalid('email')"
+              (input)="onFieldInput('email')"
+            />
+            @if (invalid('email')) {
+              <span class="field-error">Informe um endereço de e-mail válido.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="client-phone">Telefone</label>
+            <input
+              id="client-phone"
+              type="text"
+              formControlName="phone"
+              placeholder="+551133334444"
+              [class.input-invalid]="invalid('phone')"
+              (input)="onFieldInput('phone')"
+            />
+            @if (invalid('phone')) {
+              <span class="field-error">Telefone em formato inválido (ex.: +551133334444).</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="client-status">Situação *</label>
+            <select id="client-status" formControlName="status">
+              <option value="ACTIVE">Ativo</option>
+              <option value="INACTIVE">Inativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeForm()" [disabled]="saving()">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="saving() || form.pending" data-testid="save-client-btn">
+            @if (saving()) {
+              <span class="inline-spinner" aria-hidden="true"></span>
+              <span>Salvando...</span>
+            } @else {
+              <span>{{ editingClient() ? 'Salvar Alterações' : 'Cadastrar Cliente' }}</span>
+            }
+          </button>
+        </div>
+      </form>
+    </article>
+  }
+
+  <section class="filters-card">
+    <form class="filters-grid" (ngSubmit)="applyFilters()">
+      <div class="filter-field">
+        <label for="clients-search">Buscar</label>
+        <input
+          id="clients-search"
+          name="search"
+          type="text"
+          [(ngModel)]="searchFilter"
+          placeholder="Nome, razão social, documento ou código..."
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="clients-status">Situação</label>
+        <select id="clients-status" name="status" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option value="">Todas as situações</option>
+          <option value="ACTIVE">Ativo</option>
+          <option value="INACTIVE">Inativo</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <button type="button" class="btn btn-secondary" (click)="clearFilters()">Limpar</button>
+      </div>
+    </form>
+  </section>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar clientes</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadClients()">Tentar novamente</button>
+    </div>
+  }
+
+  <article class="table-card">
+    @if (loading()) {
+      <div class="skeleton-list" aria-label="Carregando clientes">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    } @else if (pageData().content.length === 0) {
+      <div class="empty-state">
+        <h3>Nenhum cliente encontrado</h3>
+        <p>Refine a busca por nome, documento ou código, ou cadastre o primeiro cliente.</p>
+        <button type="button" class="btn btn-primary" (click)="openCreateForm()">+ Cadastrar Cliente</button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('code')">
+                  <span>Código</span>
+                  <span class="sort-indicator">{{ sortIcon('code') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('name')">
+                  <span>Cliente</span>
+                  <span class="sort-indicator">{{ sortIcon('name') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('document')">
+                  <span>Documento</span>
+                  <span class="sort-indicator">{{ sortIcon('document') }}</span>
+                </button>
+              </th>
+              <th>Contato</th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('status')">
+                  <span>Situação</span>
+                  <span class="sort-indicator">{{ sortIcon('status') }}</span>
+                </button>
+              </th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (client of pageData().content; track client.id) {
+              <tr>
+                <td>
+                  @if (client.code) {
+                    <span class="code-chip">{{ client.code }}</span>
+                  } @else {
+                    <span>—</span>
+                  }
+                </td>
+                <td>
+                  <div class="cell-primary">{{ client.name }}</div>
+                  @if (client.legalName) {
+                    <div class="cell-secondary">{{ client.legalName }}</div>
+                  }
+                </td>
+                <td>{{ client.document || '—' }}</td>
+                <td>
+                  <div>{{ client.email || '—' }}</div>
+                  @if (client.phone) {
+                    <div class="cell-secondary">{{ client.phone }}</div>
+                  }
+                </td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.badge-active]="client.active"
+                    [class.badge-inactive]="!client.active"
+                  >
+                    {{ client.active ? 'Ativo' : 'Inativo' }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <a
+                      [routerLink]="['/app/clients', client.id, 'sites']"
+                      class="btn btn-secondary btn-sm"
+                    >
+                      Locais
+                    </a>
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="openEditForm(client)">
+                      Editar
+                    </button>
+                    @if (client.active) {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(client)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-client-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateClient(client)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-client-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination
+        [page]="pageData().page"
+        [size]="pageData().size"
+        [totalElements]="pageData().totalElements"
+        [totalPages]="pageData().totalPages"
+        [first]="pageData().first"
+        [last]="pageData().last"
+        [disabled]="loading()"
+        (pageChange)="onPageChange($event)"
+        (sizeChange)="onSizeChange($event)"
+      />
+    }
+  </article>
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    title="Confirmar inativação de cliente"
+    [entityLabel]="confirmTarget()?.name || ''"
+    message="Deseja realmente inativar este cliente? Ele não será excluído fisicamente, mas ficará bloqueado para novos locais, equipamentos e inspeções."
+    [alertBannerText]="confirmAlertBanner()"
+    [requireExtraConfirmation]="true"
+    confirmLabel="Confirmar Inativação"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
+</section>
+

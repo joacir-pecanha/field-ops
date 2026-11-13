@@ -1,0 +1,355 @@
+<section class="master-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Usuários e Perfis</h1>
+      <p>Gerencie administradores, supervisores e técnicos autorizados na plataforma FieldOps.</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn btn-primary" (click)="openCreateForm()" data-testid="new-user-btn">
+        + Novo Usuário
+      </button>
+    </div>
+  </header>
+
+  @if (formOpen()) {
+    <article class="form-drawer-card" data-testid="user-form-card">
+      <div class="form-header">
+        <div>
+          <h2>{{ editingUser() ? 'Editar Usuário' : 'Novo Usuário' }}</h2>
+          <p>
+            {{
+              editingUser()
+                ? 'Atualize perfil, situação ou redefina a senha de acesso.'
+                : 'Preencha os dados de acesso. O e-mail é validado em tempo real contra duplicidade.'
+            }}
+          </p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="closeForm()">Fechar</button>
+      </div>
+
+      @if (formError()) {
+        <div class="alert-banner alert-error" role="alert">
+          <div>
+            <strong>Não foi possível salvar o usuário</strong>
+            <p>{{ formError() }}</p>
+          </div>
+        </div>
+      }
+
+      <form class="reactive-form" [formGroup]="form" (ngSubmit)="submitForm()" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="user-name">Nome completo *</label>
+            <input
+              id="user-name"
+              type="text"
+              formControlName="name"
+              placeholder="Ex.: Carlos Técnico"
+              [class.input-invalid]="invalid('name')"
+              (input)="onFieldInput('name')"
+            />
+            @if (invalid('name')) {
+              <span class="field-error">
+                @if (form.controls.name.hasError('required')) {
+                  O nome do usuário é obrigatório.
+                } @else if (form.controls.name.hasError('minlength') || form.controls.name.hasError('maxlength')) {
+                  Informe entre 2 e 150 caracteres.
+                } @else if (form.controls.name.hasError('serverError')) {
+                  {{ form.controls.name.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="user-email">E-mail corporativo *</label>
+            <input
+              id="user-email"
+              type="email"
+              formControlName="email"
+              placeholder="nome@fieldops.com"
+              [class.input-invalid]="invalid('email')"
+              (input)="onFieldInput('email')"
+            />
+            @if (form.controls.email.pending) {
+              <span class="field-checking">Verificando disponibilidade do e-mail...</span>
+            } @else if (invalid('email')) {
+              <span class="field-error">
+                @if (form.controls.email.hasError('required')) {
+                  O e-mail é obrigatório.
+                } @else if (form.controls.email.hasError('email')) {
+                  Informe um endereço de e-mail válido.
+                } @else if (form.controls.email.hasError('emailTaken')) {
+                  Já existe um usuário cadastrado com este e-mail.
+                } @else if (form.controls.email.hasError('serverError')) {
+                  {{ form.controls.email.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="user-password">
+              {{ editingUser() ? 'Nova senha (opcional)' : 'Senha inicial *' }}
+            </label>
+            <input
+              id="user-password"
+              type="password"
+              formControlName="password"
+              [placeholder]="editingUser() ? 'Deixe em branco para manter a atual' : 'Mínimo 8 caracteres'"
+              [class.input-invalid]="invalid('password')"
+              (input)="onFieldInput('password')"
+            />
+            @if (editingUser() && !invalid('password')) {
+              <span class="field-hint">Ao informar nova senha, todas as sessões ativas serão revogadas.</span>
+            }
+            @if (invalid('password')) {
+              <span class="field-error">
+                @if (form.controls.password.hasError('required')) {
+                  A senha inicial é obrigatória.
+                } @else if (form.controls.password.hasError('minlength') || form.controls.password.hasError('maxlength')) {
+                  A senha deve ter entre 8 e 100 caracteres.
+                } @else if (form.controls.password.hasError('serverError')) {
+                  {{ form.controls.password.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="user-role">Perfil *</label>
+            <select id="user-role" formControlName="role" [class.input-invalid]="invalid('role')">
+              @for (item of roles; track item.value) {
+                <option [value]="item.value">{{ item.label }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="user-status">Situação *</label>
+            <select id="user-status" formControlName="status" [class.input-invalid]="invalid('status')">
+              @for (item of statuses; track item.value) {
+                <option [value]="item.value">{{ item.label }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="user-phone">Telefone</label>
+            <input
+              id="user-phone"
+              type="text"
+              formControlName="phone"
+              placeholder="+5511999990001"
+              [class.input-invalid]="invalid('phone')"
+              (input)="onFieldInput('phone')"
+            />
+            @if (invalid('phone')) {
+              <span class="field-error">
+                @if (form.controls.phone.hasError('pattern')) {
+                  Informe um telefone válido (ex.: +5511999990001).
+                } @else if (form.controls.phone.hasError('serverError')) {
+                  {{ form.controls.phone.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+        </div>
+
+        <div class="form-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeForm()" [disabled]="saving()">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="saving() || form.pending" data-testid="save-user-btn">
+            @if (saving()) {
+              <span class="inline-spinner" aria-hidden="true"></span>
+              <span>Salvando...</span>
+            } @else {
+              <span>{{ editingUser() ? 'Salvar Alterações' : 'Cadastrar Usuário' }}</span>
+            }
+          </button>
+        </div>
+      </form>
+    </article>
+  }
+
+  <section class="filters-card">
+    <form class="filters-grid" (ngSubmit)="applyFilters()">
+      <div class="filter-field">
+        <label for="users-search">Buscar</label>
+        <input
+          id="users-search"
+          name="search"
+          type="text"
+          [(ngModel)]="searchFilter"
+          placeholder="Nome, e-mail ou telefone..."
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="users-role">Perfil</label>
+        <select id="users-role" name="role" [(ngModel)]="roleFilter" (change)="applyFilters()">
+          <option value="">Todos os perfis</option>
+          @for (item of roles; track item.value) {
+            <option [value]="item.value">{{ item.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="users-status">Situação</label>
+        <select id="users-status" name="status" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option value="">Todas as situações</option>
+          @for (item of statuses; track item.value) {
+            <option [value]="item.value">{{ item.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <button type="button" class="btn btn-secondary" (click)="clearFilters()">Limpar</button>
+      </div>
+    </form>
+  </section>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar usuários</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadUsers()">Tentar novamente</button>
+    </div>
+  }
+
+  <article class="table-card">
+    @if (loading()) {
+      <div class="skeleton-list" aria-label="Carregando usuários">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    } @else if (pageData().content.length === 0) {
+      <div class="empty-state">
+        <h3>Nenhum usuário encontrado</h3>
+        <p>Ajuste os filtros de pesquisa ou cadastre um novo usuário.</p>
+        <button type="button" class="btn btn-primary" (click)="openCreateForm()">+ Cadastrar Usuário</button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('name')">
+                  <span>Nome</span>
+                  <span class="sort-indicator">{{ sortIcon('name') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('email')">
+                  <span>E-mail</span>
+                  <span class="sort-indicator">{{ sortIcon('email') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('role')">
+                  <span>Perfil</span>
+                  <span class="sort-indicator">{{ sortIcon('role') }}</span>
+                </button>
+              </th>
+              <th>Telefone</th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('status')">
+                  <span>Situação</span>
+                  <span class="sort-indicator">{{ sortIcon('status') }}</span>
+                </button>
+              </th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of pageData().content; track user.id) {
+              <tr>
+                <td>
+                  <div class="cell-primary">{{ user.name }}</div>
+                </td>
+                <td>{{ user.email }}</td>
+                <td>
+                  <span class="status-badge badge-role">{{ roleLabel(user.role) }}</span>
+                </td>
+                <td>{{ user.phone || '—' }}</td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.badge-active]="user.status === 'ACTIVE'"
+                    [class.badge-inactive]="user.status === 'INACTIVE'"
+                    [class.badge-blocked]="user.status === 'BLOCKED'"
+                  >
+                    {{ statusLabel(user.status) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="openEditForm(user)">
+                      Editar
+                    </button>
+                    @if (user.status === 'ACTIVE') {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(user)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-user-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateUser(user)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-user-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination
+        [page]="pageData().page"
+        [size]="pageData().size"
+        [totalElements]="pageData().totalElements"
+        [totalPages]="pageData().totalPages"
+        [first]="pageData().first"
+        [last]="pageData().last"
+        [disabled]="loading()"
+        (pageChange)="onPageChange($event)"
+        (sizeChange)="onSizeChange($event)"
+      />
+    }
+  </article>
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    [title]="pendingFormUpdate()?.status === 'BLOCKED' ? 'Confirmar bloqueio de usuário' : 'Confirmar inativação de usuário'"
+    [entityLabel]="confirmTarget() ? confirmTarget()!.name + ' (' + confirmTarget()!.email + ')' : ''"
+    message="Deseja realmente revogar o acesso ativo deste usuário? Todas as sessões JWT/refresh ativas serão encerradas imediatamente (RN-008)."
+    impactWarning="Usuários inativos ou bloqueados ficam impedidos de iniciar novas sessões e de receber novas inspeções (RN-001, RN-027). Registros históricos e auditoria permanecem intactos (RN-002)."
+    [confirmLabel]="pendingFormUpdate()?.status === 'BLOCKED' ? 'Confirmar Bloqueio' : 'Confirmar Inativação'"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
+</section>
+

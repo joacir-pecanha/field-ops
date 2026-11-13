@@ -1,0 +1,239 @@
+package com.fieldops.config;
+
+import com.fieldops.modules.master.domain.Client;
+import com.fieldops.modules.master.domain.Equipment;
+import com.fieldops.modules.master.domain.EquipmentStatus;
+import com.fieldops.modules.master.domain.MasterStatus;
+import com.fieldops.modules.master.domain.Site;
+import com.fieldops.modules.master.domain.User;
+import com.fieldops.modules.master.domain.UserRole;
+import com.fieldops.modules.master.domain.UserStatus;
+import com.fieldops.modules.master.repository.ClientRepository;
+import com.fieldops.modules.master.repository.EquipmentRepository;
+import com.fieldops.modules.master.repository.SiteRepository;
+import com.fieldops.modules.master.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.UUID;
+
+/**
+ * Inicializador idempotente para ambiente de desenvolvimento/validação humana (Swagger UI + Web Admin).
+ * Garante contas padrão de acesso e massa mínima inicial de Clientes, Locais e Equipamentos caso o banco esteja vazio.
+ */
+@Configuration
+@Profile("!test")
+public class DevBootstrapSeedConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(DevBootstrapSeedConfig.class);
+
+    @Bean
+    ApplicationRunner devMasterDataInitializer(
+            UserRepository userRepository,
+            ClientRepository clientRepository,
+            SiteRepository siteRepository,
+            EquipmentRepository equipmentRepository,
+            PasswordEncoder passwordEncoder
+    ) {
+        return args -> seedInitialData(
+                userRepository,
+                clientRepository,
+                siteRepository,
+                equipmentRepository,
+                passwordEncoder
+        );
+    }
+
+    @Transactional
+    void seedInitialData(
+            UserRepository userRepository,
+            ClientRepository clientRepository,
+            SiteRepository siteRepository,
+            EquipmentRepository equipmentRepository,
+            PasswordEncoder passwordEncoder
+    ) {
+        seedDefaultUser(
+                userRepository,
+                passwordEncoder,
+                "Administrador FieldOps",
+                "admin@fieldops.com",
+                UserRole.ADMIN,
+                "+5511990000001"
+        );
+        seedDefaultUser(
+                userRepository,
+                passwordEncoder,
+                "Supervisor Operacional",
+                "supervisor@fieldops.com",
+                UserRole.SUPERVISOR,
+                "+5511990000002"
+        );
+        seedDefaultUser(
+                userRepository,
+                passwordEncoder,
+                "Carlos Técnico",
+                "tecnico@fieldops.com",
+                UserRole.TECHNICIAN,
+                "+5511990000003"
+        );
+
+        if (clientRepository.count() > 0) {
+            return;
+        }
+
+        Client alfa = new Client();
+        alfa.setId(UUID.randomUUID());
+        alfa.setCode("CLI-ALFA");
+        alfa.setName("Indústria Alfa");
+        alfa.setLegalName("Indústria Alfa S.A.");
+        alfa.setDocument("12.345.678/0001-90");
+        alfa.setEmail("operacoes@alfa.com.br");
+        alfa.setPhone("+551533334400");
+        alfa.setStatus(MasterStatus.ACTIVE);
+        alfa = clientRepository.save(alfa);
+
+        Client beta = new Client();
+        beta.setId(UUID.randomUUID());
+        beta.setCode("CLI-BETA");
+        beta.setName("Logística Beta");
+        beta.setLegalName("Logística Beta Ltda.");
+        beta.setDocument("98.765.432/0001-10");
+        beta.setEmail("manutencao@beta.com.br");
+        beta.setPhone("+551144445500");
+        beta.setStatus(MasterStatus.ACTIVE);
+        beta = clientRepository.save(beta);
+
+        Site siteSorocaba = new Site();
+        siteSorocaba.setId(UUID.randomUUID());
+        siteSorocaba.setClient(alfa);
+        siteSorocaba.setCode("SITE-SOR-01");
+        siteSorocaba.setName("Planta Sorocaba");
+        siteSorocaba.setDescription("Unidade fabril principal com subestação e utilidades.");
+        siteSorocaba.setAddressLine("Av. Industrial, 1200");
+        siteSorocaba.setCity("Sorocaba");
+        siteSorocaba.setState("SP");
+        siteSorocaba.setPostalCode("18010-000");
+        siteSorocaba.setLatitude(new BigDecimal("-23.5015300"));
+        siteSorocaba.setLongitude(new BigDecimal("-47.4525600"));
+        siteSorocaba.setContactName("Marcos Silva");
+        siteSorocaba.setContactPhone("+5515999991111");
+        siteSorocaba.setStatus(MasterStatus.ACTIVE);
+        siteSorocaba = siteRepository.save(siteSorocaba);
+
+        Site siteCampinas = new Site();
+        siteCampinas.setId(UUID.randomUUID());
+        siteCampinas.setClient(beta);
+        siteCampinas.setCode("SITE-CMP-01");
+        siteCampinas.setName("Centro de Distribuição Campinas");
+        siteCampinas.setDescription("Armazém refrigerado e docas de expedição.");
+        siteCampinas.setAddressLine("Rod. Anhanguera, Km 98");
+        siteCampinas.setCity("Campinas");
+        siteCampinas.setState("SP");
+        siteCampinas.setPostalCode("13050-000");
+        siteCampinas.setContactName("Juliana Costa");
+        siteCampinas.setContactPhone("+5519999992222");
+        siteCampinas.setStatus(MasterStatus.ACTIVE);
+        siteCampinas = siteRepository.save(siteCampinas);
+
+        createSeedEquipment(
+                equipmentRepository,
+                siteSorocaba,
+                "EQP-GD-001",
+                "Gerador Diesel GD-001",
+                "PAT-2026-0001",
+                "SN-CAT-9001",
+                "Caterpillar",
+                "C15-500kVA",
+                "QR-FIELDOPS-GD001",
+                LocalDate.of(2025, 3, 10)
+        );
+        createSeedEquipment(
+                equipmentRepository,
+                siteSorocaba,
+                "EQP-CP-002",
+                "Compressor Parafuso CP-002",
+                "PAT-2026-0002",
+                "SN-ATL-8821",
+                "Atlas Copco",
+                "GA 55+",
+                "QR-FIELDOPS-CP002",
+                LocalDate.of(2025, 6, 20)
+        );
+        createSeedEquipment(
+                equipmentRepository,
+                siteCampinas,
+                "EQP-TR-003",
+                "Transformador Subestação TR-003",
+                "PAT-2026-0003",
+                "SN-WEG-4410",
+                "WEG",
+                "1500kVA-13.8kV",
+                "QR-FIELDOPS-TR003",
+                LocalDate.of(2024, 11, 5)
+        );
+
+        log.info("Massa inicial de desenvolvimento verificada/populada para validação (clientes, locais, equipamentos).");
+    }
+
+    private void seedDefaultUser(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            String name,
+            String email,
+            UserRole role,
+            String phone
+    ) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            return;
+        }
+        User user = new User(
+                UUID.randomUUID(),
+                name,
+                email,
+                passwordEncoder.encode("FieldOps@123"),
+                role,
+                UserStatus.ACTIVE,
+                phone
+        );
+        userRepository.save(user);
+    }
+
+    private void createSeedEquipment(
+            EquipmentRepository equipmentRepository,
+            Site site,
+            String code,
+            String name,
+            String assetNumber,
+            String serialNumber,
+            String manufacturer,
+            String model,
+            String qrCode,
+            LocalDate installedAt
+    ) {
+        if (equipmentRepository.existsByQrCodeIgnoreCase(qrCode)) {
+            return;
+        }
+        Equipment equipment = new Equipment();
+        equipment.setId(UUID.randomUUID());
+        equipment.setSite(site);
+        equipment.setCode(code);
+        equipment.setName(name);
+        equipment.setAssetNumber(assetNumber);
+        equipment.setSerialNumber(serialNumber);
+        equipment.setManufacturer(manufacturer);
+        equipment.setModel(model);
+        equipment.setQrCode(qrCode);
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+        equipment.setInstalledAt(installedAt);
+        equipmentRepository.save(equipment);
+    }
+}
+

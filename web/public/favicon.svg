@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="fieldops-bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="fieldops-accent" x1="18" y1="14" x2="46" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#22d3ee" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#fieldops-bg)" stroke="#38bdf8" stroke-width="2" />
+  <!-- Prancheta técnica industrial -->
+  <rect x="18" y="16" width="28" height="34" rx="4" stroke="#e2e8f0" stroke-width="2.5" fill="#0f172a" fill-opacity="0.45" />
+  <rect x="25" y="12" width="14" height="7" rx="2.5" fill="url(#fieldops-accent)" />
+  <!-- Engrenagem + check de inspeção -->
+  <circle cx="32" cy="34" r="8.5" stroke="url(#fieldops-accent)" stroke-width="2.2" />
+  <path d="M32 22.5v2.5M32 43v2.5M20.5 34H23M41 34h2.5M24 26l1.8 1.8M38.2 40.2L40 42M40 26l-1.8 1.8M25.8 40.2L24 42" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+  <path d="M28.5 34.2l2.3 2.3 4.9-5" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
+

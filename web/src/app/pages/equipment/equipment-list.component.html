@@ -1,0 +1,525 @@
+<section class="master-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Equipamentos</h1>
+      <p>
+        Gerencie o parque de equipamentos por Cliente e Local (RN-010, RN-014) com validação única
+        de QR Code em tempo real (RN-011).
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        class="btn btn-primary"
+        (click)="openCreateForm()"
+        data-testid="new-equipment-btn"
+      >
+        + Novo Equipamento
+      </button>
+    </div>
+  </header>
+
+  @if (formOpen()) {
+    <article class="form-drawer-card" data-testid="equipment-form-card">
+      <div class="form-header">
+        <div>
+          <h2>{{ editingEquipment() ? 'Editar Equipamento' : 'Novo Equipamento' }}</h2>
+          <p>
+            Selecione primeiro o Cliente ativo para habilitar apenas os Locais pertencentes a ele.
+          </p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="closeForm()">Fechar</button>
+      </div>
+
+      @if (formError()) {
+        <div class="alert-banner alert-error" role="alert">
+          <div>
+            <strong>Não foi possível salvar o equipamento</strong>
+            <p>{{ formError() }}</p>
+          </div>
+        </div>
+      }
+
+      <form class="reactive-form" [formGroup]="form" (ngSubmit)="submitForm()" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="eq-client">Cliente ativo *</label>
+            <select
+              id="eq-client"
+              formControlName="clientId"
+              [class.input-invalid]="invalid('clientId')"
+              (change)="onFormClientChange()"
+            >
+              <option value="">Selecione um cliente ativo...</option>
+              @for (client of selectableClients(); track client.id) {
+                <option [value]="client.id">
+                  {{ client.name }}{{ client.active ? '' : ' (Inativo)' }}
+                </option>
+              }
+            </select>
+            @if (invalid('clientId')) {
+              <span class="field-error">
+                @if (form.controls.clientId.hasError('required')) {
+                  Selecione o cliente para listar seus locais vinculados.
+                } @else if (form.controls.clientId.hasError('serverError')) {
+                  {{ form.controls.clientId.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="eq-site">Local pertencente ao cliente *</label>
+            <select
+              id="eq-site"
+              formControlName="siteId"
+              [disabled]="!form.controls.clientId.value || loadingFormSites()"
+              [class.input-invalid]="invalid('siteId')"
+              (change)="onFieldInput('siteId')"
+            >
+              @if (!form.controls.clientId.value) {
+                <option value="">Selecione primeiro o cliente...</option>
+              } @else if (loadingFormSites()) {
+                <option value="">Carregando locais do cliente...</option>
+              } @else if (formSites().length === 0) {
+                <option value="">Nenhum local ativo para este cliente</option>
+              } @else {
+                <option value="">Selecione um local...</option>
+                @for (site of formSites(); track site.id) {
+                  <option [value]="site.id">{{ site.name }}</option>
+                }
+              }
+            </select>
+            @if (invalid('siteId')) {
+              <span class="field-error">
+                @if (form.controls.siteId.hasError('required')) {
+                  Todo equipamento deve pertencer a um local do cliente selecionado (RN-010).
+                } @else if (form.controls.siteId.hasError('serverError')) {
+                  {{ form.controls.siteId.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="eq-name">Nome do equipamento *</label>
+            <input
+              id="eq-name"
+              type="text"
+              formControlName="name"
+              placeholder="Ex.: Gerador Diesel GD-001"
+              [class.input-invalid]="invalid('name')"
+              (input)="onFieldInput('name')"
+            />
+            @if (invalid('name')) {
+              <span class="field-error">
+                @if (form.controls.name.hasError('required')) {
+                  O nome do equipamento é obrigatório.
+                } @else {
+                  Informe entre 2 e 150 caracteres.
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="eq-code">Código operacional</label>
+            <input
+              id="eq-code"
+              type="text"
+              formControlName="code"
+              placeholder="Ex.: EQP-GD-001"
+              [class.input-invalid]="invalid('code')"
+              (input)="onFieldInput('code')"
+            />
+            @if (invalid('code')) {
+              <span class="field-error">
+                Aceita apenas letras, números, ponto, hífen e sublinhado (2 a 50 chars).
+              </span>
+            }
+          </div>
+
+          <div class="form-field form-field-full">
+            <label for="eq-qrcode">Código QR único (RN-011) *</label>
+            <div class="input-with-action">
+              <input
+                id="eq-qrcode"
+                type="text"
+                formControlName="qrCode"
+                placeholder="Ex.: QR-FIELDOPS-GD001"
+                [class.input-invalid]="invalid('qrCode') && !hasQrCollision()"
+                [class.input-qr-collision]="hasQrCollision()"
+                (input)="onQrInput()"
+                data-testid="equipment-qrcode-input"
+              />
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="suggestUniqueQrCode()"
+              >
+                Sugerir QR Único
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="openFormQrPreview()"
+                [disabled]="!form.controls.qrCode.value.trim() || form.controls.qrCode.invalid"
+                data-testid="preview-form-qr-btn"
+              >
+                Visualizar QR
+              </button>
+            </div>
+            @if (form.controls.qrCode.pending) {
+              <span class="field-checking">Verificando unicidade do QR Code na API...</span>
+            } @else if (hasQrCollision()) {
+              <span class="field-error-vivid" role="alert" data-testid="qr-collision-error">
+                ⚠ Colisão de QR Code:
+                {{
+                  qrServerCollision() ||
+                    'Este QR Code já está cadastrado em outro equipamento. Informe um código exclusivo.'
+                }}
+              </span>
+            } @else if (invalid('qrCode')) {
+              <span class="field-error">
+                @if (form.controls.qrCode.hasError('required')) {
+                  O QR Code é obrigatório.
+                } @else if (form.controls.qrCode.hasError('minlength') || form.controls.qrCode.hasError('maxlength')) {
+                  O QR Code deve ter entre 3 e 120 caracteres.
+                } @else if (form.controls.qrCode.hasError('pattern')) {
+                  Use apenas letras, números, '.', '_', ':' ou '-'.
+                } @else if (form.controls.qrCode.hasError('serverError')) {
+                  {{ form.controls.qrCode.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="eq-asset">Patrimônio</label>
+            <input
+              id="eq-asset"
+              type="text"
+              formControlName="assetNumber"
+              placeholder="PAT-2026-0091"
+              [class.input-invalid]="invalid('assetNumber')"
+            />
+            @if (invalid('assetNumber')) {
+              <span class="field-error">Use apenas letras, números, ponto, hífen e sublinhado.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="eq-serial">Número de série</label>
+            <input
+              id="eq-serial"
+              type="text"
+              formControlName="serialNumber"
+              placeholder="SN-99887766"
+              [class.input-invalid]="invalid('serialNumber')"
+            />
+            @if (invalid('serialNumber')) {
+              <span class="field-error">Use apenas letras, números, ponto, hífen e sublinhado.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="eq-manufacturer">Fabricante</label>
+            <input id="eq-manufacturer" type="text" formControlName="manufacturer" placeholder="Caterpillar" />
+          </div>
+
+          <div class="form-field">
+            <label for="eq-model">Modelo</label>
+            <input id="eq-model" type="text" formControlName="model" placeholder="C15-500kVA" />
+          </div>
+
+          <div class="form-field">
+            <label for="eq-installed">Data de instalação</label>
+            <input id="eq-installed" type="date" formControlName="installedAt" />
+          </div>
+
+          <div class="form-field">
+            <label for="eq-status">Situação *</label>
+            <select id="eq-status" formControlName="status">
+              <option value="ACTIVE">Ativo</option>
+              <option value="INACTIVE">Inativo</option>
+              <option value="DECOMMISSIONED">Descomissionado</option>
+            </select>
+          </div>
+
+          <div class="form-field form-field-full">
+            <label for="eq-description">Descrição complementar</label>
+            <textarea id="eq-description" rows="2" formControlName="description"></textarea>
+          </div>
+        </div>
+
+        <div class="form-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeForm()" [disabled]="saving()">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="saving() || form.pending"
+            data-testid="save-equipment-btn"
+          >
+            @if (saving()) {
+              <span class="inline-spinner" aria-hidden="true"></span>
+              <span>Salvando...</span>
+            } @else {
+              <span>{{ editingEquipment() ? 'Salvar Alterações' : 'Cadastrar Equipamento' }}</span>
+            }
+          </button>
+        </div>
+      </form>
+    </article>
+  }
+
+  <section class="filters-card">
+    <form class="filters-grid" (ngSubmit)="applyFilters()">
+      <div class="filter-field">
+        <label for="eq-filter-client">Cliente</label>
+        <select
+          id="eq-filter-client"
+          name="clientId"
+          [(ngModel)]="clientFilter"
+          (change)="onFilterClientChange()"
+        >
+          <option value="">Todos os clientes</option>
+          @for (client of allClients(); track client.id) {
+            <option [value]="client.id">{{ client.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="eq-filter-site">Local (filtrado pelo cliente)</label>
+        <select
+          id="eq-filter-site"
+          name="siteId"
+          [(ngModel)]="siteFilter"
+          [disabled]="!clientFilter && filterSites().length === 0"
+          (change)="applyFilters()"
+        >
+          <option value="">
+            {{ clientFilter ? 'Todos os locais do cliente' : 'Selecione um cliente para filtrar' }}
+          </option>
+          @for (site of filterSites(); track site.id) {
+            <option [value]="site.id">{{ site.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="eq-filter-search">Buscar</label>
+        <input
+          id="eq-filter-search"
+          name="search"
+          type="text"
+          [(ngModel)]="searchFilter"
+          placeholder="Nome, código, QR Code, patrimônio..."
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="eq-filter-status">Situação</label>
+        <select
+          id="eq-filter-status"
+          name="status"
+          [(ngModel)]="statusFilter"
+          (change)="applyFilters()"
+        >
+          <option value="">Todas as situações</option>
+          <option value="ACTIVE">Ativo</option>
+          <option value="INACTIVE">Inativo</option>
+          <option value="DECOMMISSIONED">Descomissionado</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <button type="button" class="btn btn-secondary" (click)="clearFilters()">Limpar</button>
+      </div>
+    </form>
+  </section>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar equipamentos</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadEquipment()">
+        Tentar novamente
+      </button>
+    </div>
+  }
+
+  <article class="table-card">
+    @if (loading()) {
+      <div class="skeleton-list" aria-label="Carregando equipamentos">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    } @else if (pageData().content.length === 0) {
+      <div class="empty-state">
+        <h3>Nenhum equipamento encontrado</h3>
+        <p>Ajuste os filtros de cliente, local ou busca textual, ou cadastre um equipamento.</p>
+        <button type="button" class="btn btn-primary" (click)="openCreateForm()">
+          + Cadastrar Equipamento
+        </button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('name')">
+                  <span>Equipamento</span>
+                  <span class="sort-indicator">{{ sortIcon('name') }}</span>
+                </button>
+              </th>
+              <th>Cliente / Local</th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('qrCode')">
+                  <span>QR Code</span>
+                  <span class="sort-indicator">{{ sortIcon('qrCode') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('assetNumber')">
+                  <span>Patrimônio / Série</span>
+                  <span class="sort-indicator">{{ sortIcon('assetNumber') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('status')">
+                  <span>Situação</span>
+                  <span class="sort-indicator">{{ sortIcon('status') }}</span>
+                </button>
+              </th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of pageData().content; track item.id) {
+              <tr>
+                <td>
+                  <div class="cell-primary">{{ item.name }}</div>
+                  <div class="cell-secondary">
+                    {{ item.code || 'Sem código' }}
+                    @if (item.manufacturer || item.model) {
+                      • {{ item.manufacturer || '' }} {{ item.model || '' }}
+                    }
+                  </div>
+                </td>
+                <td>
+                  <div class="cell-primary">{{ item.siteName }}</div>
+                  <div class="cell-secondary">{{ item.clientName }}</div>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="code-chip code-chip-clickable"
+                    (click)="openQrModal(item)"
+                    title="Abrir QR Code em alta definição para download ou impressão"
+                  >
+                    {{ item.qrCode }}
+                  </button>
+                </td>
+                <td>
+                  <div>{{ item.assetNumber || '—' }}</div>
+                  @if (item.serialNumber) {
+                    <div class="cell-secondary">S/N: {{ item.serialNumber }}</div>
+                  }
+                </td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.badge-active]="item.status === 'ACTIVE'"
+                    [class.badge-inactive]="item.status === 'INACTIVE'"
+                    [class.badge-decommissioned]="item.status === 'DECOMMISSIONED'"
+                  >
+                    {{ statusLabel(item.status) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      (click)="openQrModal(item)"
+                      data-testid="open-qr-modal-btn"
+                    >
+                      QR Code
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      (click)="openEditForm(item)"
+                    >
+                      Editar
+                    </button>
+                    @if (item.status === 'ACTIVE') {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(item)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-equipment-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateEquipment(item)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-equipment-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination
+        [page]="pageData().page"
+        [size]="pageData().size"
+        [totalElements]="pageData().totalElements"
+        [totalPages]="pageData().totalPages"
+        [first]="pageData().first"
+        [last]="pageData().last"
+        [disabled]="loading()"
+        (pageChange)="onPageChange($event)"
+        (sizeChange)="onSizeChange($event)"
+      />
+    }
+  </article>
+
+  <app-qr-code-modal
+    [equipment]="qrModalEquipment()"
+    (closed)="closeQrModal()"
+  />
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    [title]="pendingFormPayload()?.status === 'DECOMMISSIONED' ? 'Confirmar descomissionamento de equipamento' : 'Confirmar inativação de equipamento'"
+    [entityLabel]="confirmTarget() ? confirmTarget()!.name + ' (' + confirmTarget()!.qrCode + ')' : ''"
+    message="Deseja realmente alterar a situação deste equipamento? Equipamentos inativos ou descomissionados ficam impedidos de receber novas inspeções (RN-012, RN-013)."
+    [confirmLabel]="pendingFormPayload()?.status === 'DECOMMISSIONED' ? 'Confirmar Descomissionamento' : 'Confirmar Inativação'"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
+</section>
+

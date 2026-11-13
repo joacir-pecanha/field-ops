@@ -6,31 +6,58 @@ import { UserRole } from '../core/auth/auth.models';
 import { AuthService } from '../core/auth/auth.service';
 import { NotificationService } from '../core/services/notification.service';
 
+type NavIconKey =
+  | 'dashboard'
+  | 'users'
+  | 'clients'
+  | 'sites'
+  | 'equipment'
+  | 'templates'
+  | 'inspections'
+  | 'non-conformities'
+  | 'api-docs';
+
 interface NavItem {
   label: string;
   route: string;
   roles: readonly UserRole[];
-  shortTag: string;
+  icon: NavIconKey;
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
-  { label: 'Dashboard', route: '/app/dashboard', roles: ['ADMIN', 'SUPERVISOR'], shortTag: 'DB' },
-  { label: 'Usuários', route: '/app/users', roles: ['ADMIN'], shortTag: 'US' },
-  { label: 'Clientes', route: '/app/clients', roles: ['ADMIN', 'SUPERVISOR'], shortTag: 'CL' },
-  { label: 'Locais', route: '/app/sites', roles: ['ADMIN', 'SUPERVISOR'], shortTag: 'LC' },
-  { label: 'Equipamentos', route: '/app/equipment', roles: ['ADMIN', 'SUPERVISOR'], shortTag: 'EQ' },
+  { label: 'Dashboard', route: '/app/dashboard', roles: ['ADMIN', 'SUPERVISOR'], icon: 'dashboard' },
+  { label: 'Usuários', route: '/app/users', roles: ['ADMIN'], icon: 'users' },
+  { label: 'Clientes', route: '/app/clients', roles: ['ADMIN', 'SUPERVISOR'], icon: 'clients' },
+  { label: 'Locais', route: '/app/sites', roles: ['ADMIN', 'SUPERVISOR'], icon: 'sites' },
+  {
+    label: 'Equipamentos',
+    route: '/app/equipment',
+    roles: ['ADMIN', 'SUPERVISOR'],
+    icon: 'equipment',
+  },
   {
     label: 'Modelos',
     route: '/app/inspection-templates',
     roles: ['ADMIN', 'SUPERVISOR'],
-    shortTag: 'MD',
+    icon: 'templates',
   },
-  { label: 'Inspeções', route: '/app/inspections', roles: ['ADMIN', 'SUPERVISOR'], shortTag: 'IN' },
+  {
+    label: 'Inspeções',
+    route: '/app/inspections',
+    roles: ['ADMIN', 'SUPERVISOR'],
+    icon: 'inspections',
+  },
   {
     label: 'Não Conformidades',
     route: '/app/non-conformities',
     roles: ['ADMIN', 'SUPERVISOR'],
-    shortTag: 'NC',
+    icon: 'non-conformities',
+  },
+  {
+    label: 'Swagger / API',
+    route: '/app/api-docs',
+    roles: ['ADMIN', 'SUPERVISOR'],
+    icon: 'api-docs',
   },
 ];
 

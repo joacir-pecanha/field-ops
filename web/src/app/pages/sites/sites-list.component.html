@@ -1,0 +1,427 @@
+<section class="master-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Locais de Inspeção</h1>
+      <p>Gerencie unidades e endereços vinculados obrigatoriamente a um cliente ativo (RN-009).</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn btn-primary" (click)="openCreateForm()" data-testid="new-site-btn">
+        + Novo Local
+      </button>
+    </div>
+  </header>
+
+  @if (formOpen()) {
+    <article class="form-drawer-card" data-testid="site-form-card">
+      <div class="form-header">
+        <div>
+          <h2>{{ editingSite() ? 'Editar Local' : 'Novo Local' }}</h2>
+          <p>Selecione um cliente ativo e informe o endereço e contato da unidade.</p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" (click)="closeForm()">Fechar</button>
+      </div>
+
+      @if (formError()) {
+        <div class="alert-banner alert-error" role="alert">
+          <div>
+            <strong>Não foi possível salvar o local</strong>
+            <p>{{ formError() }}</p>
+          </div>
+        </div>
+      }
+
+      <form class="reactive-form" [formGroup]="form" (ngSubmit)="submitForm()" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="site-client">Cliente ativo *</label>
+            <select
+              id="site-client"
+              formControlName="clientId"
+              [class.input-invalid]="invalid('clientId')"
+              (change)="onClientSelectionChanged()"
+            >
+              <option value="">Selecione um cliente ativo...</option>
+              @for (client of selectableClients(); track client.id) {
+                <option [value]="client.id">
+                  {{ client.name }}{{ client.active ? '' : ' (Inativo)' }}
+                </option>
+              }
+            </select>
+            @if (invalid('clientId')) {
+              <span class="field-error">
+                @if (form.controls.clientId.hasError('required')) {
+                  É obrigatório vincular o local a um cliente ativo (RN-009).
+                } @else if (form.controls.clientId.hasError('serverError')) {
+                  {{ form.controls.clientId.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-code">Código do local</label>
+            <input
+              id="site-code"
+              type="text"
+              formControlName="code"
+              placeholder="Ex.: SITE-SOR-01"
+              [class.input-invalid]="invalid('code')"
+              (input)="onFieldInput('code')"
+            />
+            @if (form.controls.code.pending) {
+              <span class="field-checking">Verificando unicidade para o cliente...</span>
+            } @else if (invalid('code')) {
+              <span class="field-error">
+                @if (form.controls.code.hasError('minlength') || form.controls.code.hasError('maxlength')) {
+                  Informe entre 2 e 50 caracteres.
+                } @else if (form.controls.code.hasError('pattern')) {
+                  Aceita apenas letras, números, ponto, hífen e sublinhado.
+                } @else if (form.controls.code.hasError('codeTaken')) {
+                  Já existe um local com este código para o cliente selecionado.
+                } @else if (form.controls.code.hasError('serverError')) {
+                  {{ form.controls.code.getError('serverError') }}
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-name">Nome do local *</label>
+            <input
+              id="site-name"
+              type="text"
+              formControlName="name"
+              placeholder="Ex.: Planta Sorocaba"
+              [class.input-invalid]="invalid('name')"
+              (input)="onFieldInput('name')"
+            />
+            @if (invalid('name')) {
+              <span class="field-error">
+                @if (form.controls.name.hasError('required')) {
+                  O nome do local é obrigatório.
+                } @else {
+                  Informe entre 2 e 150 caracteres.
+                }
+              </span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-address">Endereço</label>
+            <input
+              id="site-address"
+              type="text"
+              formControlName="addressLine"
+              placeholder="Av. Industrial, 1200"
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="site-city">Cidade</label>
+            <input id="site-city" type="text" formControlName="city" placeholder="Sorocaba" />
+          </div>
+
+          <div class="form-field">
+            <label for="site-state">UF</label>
+            <input
+              id="site-state"
+              type="text"
+              formControlName="state"
+              maxlength="2"
+              placeholder="SP"
+              [class.input-invalid]="invalid('state')"
+              (input)="onFieldInput('state')"
+            />
+            @if (invalid('state')) {
+              <span class="field-error">Informe exatamente 2 letras (ex.: SP).</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-postal">CEP</label>
+            <input
+              id="site-postal"
+              type="text"
+              formControlName="postalCode"
+              placeholder="18010-000"
+              [class.input-invalid]="invalid('postalCode')"
+              (input)="onFieldInput('postalCode')"
+            />
+            @if (invalid('postalCode')) {
+              <span class="field-error">CEP inválido (formato 00000-000).</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-lat">Latitude</label>
+            <input
+              id="site-lat"
+              type="number"
+              step="0.000001"
+              formControlName="latitude"
+              placeholder="-23.501530"
+              [class.input-invalid]="invalid('latitude')"
+            />
+            @if (invalid('latitude')) {
+              <span class="field-error">A latitude deve estar entre -90 e 90.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-lng">Longitude</label>
+            <input
+              id="site-lng"
+              type="number"
+              step="0.000001"
+              formControlName="longitude"
+              placeholder="-47.452560"
+              [class.input-invalid]="invalid('longitude')"
+            />
+            @if (invalid('longitude')) {
+              <span class="field-error">A longitude deve estar entre -180 e 180.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-contact-name">Responsável local</label>
+            <input id="site-contact-name" type="text" formControlName="contactName" placeholder="Marcos Silva" />
+          </div>
+
+          <div class="form-field">
+            <label for="site-contact-phone">Telefone local</label>
+            <input
+              id="site-contact-phone"
+              type="text"
+              formControlName="contactPhone"
+              placeholder="+5515999991111"
+              [class.input-invalid]="invalid('contactPhone')"
+            />
+            @if (invalid('contactPhone')) {
+              <span class="field-error">Formato de telefone inválido.</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="site-status">Situação *</label>
+            <select id="site-status" formControlName="status">
+              <option value="ACTIVE">Ativo</option>
+              <option value="INACTIVE">Inativo</option>
+            </select>
+          </div>
+
+          <div class="form-field form-field-full">
+            <label for="site-description">Descrição complementar</label>
+            <textarea id="site-description" rows="2" formControlName="description"></textarea>
+          </div>
+        </div>
+
+        <div class="form-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeForm()" [disabled]="saving()">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="saving() || form.pending" data-testid="save-site-btn">
+            @if (saving()) {
+              <span class="inline-spinner" aria-hidden="true"></span>
+              <span>Salvando...</span>
+            } @else {
+              <span>{{ editingSite() ? 'Salvar Alterações' : 'Cadastrar Local' }}</span>
+            }
+          </button>
+        </div>
+      </form>
+    </article>
+  }
+
+  <section class="filters-card">
+    <form class="filters-grid" (ngSubmit)="applyFilters()">
+      <div class="filter-field">
+        <label for="sites-client">Cliente</label>
+        <select id="sites-client" name="clientId" [(ngModel)]="clientFilter" (change)="applyFilters()">
+          <option value="">Todos os clientes</option>
+          @for (client of allClients(); track client.id) {
+            <option [value]="client.id">{{ client.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="sites-search">Buscar</label>
+        <input
+          id="sites-search"
+          name="search"
+          type="text"
+          [(ngModel)]="searchFilter"
+          placeholder="Nome, código, cidade ou endereço..."
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="sites-status">Situação</label>
+        <select id="sites-status" name="status" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option value="">Todas as situações</option>
+          <option value="ACTIVE">Ativo</option>
+          <option value="INACTIVE">Inativo</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <button type="button" class="btn btn-secondary" (click)="clearFilters()">Limpar</button>
+      </div>
+    </form>
+  </section>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar locais</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadSites()">Tentar novamente</button>
+    </div>
+  }
+
+  <article class="table-card">
+    @if (loading()) {
+      <div class="skeleton-list" aria-label="Carregando locais">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    } @else if (pageData().content.length === 0) {
+      <div class="empty-state">
+        <h3>Nenhum local encontrado</h3>
+        <p>Selecione outro cliente, ajuste a busca ou cadastre um novo local.</p>
+        <button type="button" class="btn btn-primary" (click)="openCreateForm()">+ Cadastrar Local</button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('code')">
+                  <span>Código</span>
+                  <span class="sort-indicator">{{ sortIcon('code') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('name')">
+                  <span>Local</span>
+                  <span class="sort-indicator">{{ sortIcon('name') }}</span>
+                </button>
+              </th>
+              <th>Cliente</th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('city')">
+                  <span>Cidade / UF</span>
+                  <span class="sort-indicator">{{ sortIcon('city') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('status')">
+                  <span>Situação</span>
+                  <span class="sort-indicator">{{ sortIcon('status') }}</span>
+                </button>
+              </th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (site of pageData().content; track site.id) {
+              <tr>
+                <td>
+                  @if (site.code) {
+                    <span class="code-chip">{{ site.code }}</span>
+                  } @else {
+                    <span>—</span>
+                  }
+                </td>
+                <td>
+                  <div class="cell-primary">{{ site.name }}</div>
+                  @if (site.addressLine) {
+                    <div class="cell-secondary">{{ site.addressLine }}</div>
+                  }
+                </td>
+                <td>{{ site.clientName }}</td>
+                <td>
+                  {{ site.city || '—' }}@if (site.state) { / {{ site.state }} }
+                </td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.badge-active]="site.active"
+                    [class.badge-inactive]="!site.active"
+                  >
+                    {{ site.active ? 'Ativo' : 'Inativo' }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <a
+                      [routerLink]="['/app/sites', site.id, 'equipment']"
+                      class="btn btn-secondary btn-sm"
+                    >
+                      Equipamentos
+                    </a>
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="openEditForm(site)">
+                      Editar
+                    </button>
+                    @if (site.active) {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(site)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-site-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateSite(site)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-site-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination
+        [page]="pageData().page"
+        [size]="pageData().size"
+        [totalElements]="pageData().totalElements"
+        [totalPages]="pageData().totalPages"
+        [first]="pageData().first"
+        [last]="pageData().last"
+        [disabled]="loading()"
+        (pageChange)="onPageChange($event)"
+        (sizeChange)="onSizeChange($event)"
+      />
+    }
+  </article>
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    title="Confirmar inativação de local"
+    [entityLabel]="confirmTarget() ? confirmTarget()!.name + ' (' + confirmTarget()!.clientName + ')' : ''"
+    message="Deseja realmente inativar este local? Locais inativos não podem receber novas inspeções (RN-013)."
+    [alertBannerText]="confirmAlertBanner()"
+    confirmLabel="Confirmar Inativação"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
+</section>
+
