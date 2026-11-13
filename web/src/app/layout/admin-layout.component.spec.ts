@@ -58,6 +58,14 @@ describe('AdminLayoutComponent', () => {
     expect(userInfo.textContent).toContain('Supervisor');
   });
 
+  it('should render SVG icons for brand mark and navigation items without text tags', () => {
+    const brandSvg = fixture.nativeElement.querySelector('.brand-mark svg') as SVGElement | null;
+    expect(brandSvg).not.toBeNull();
+
+    const navIcons = fixture.nativeElement.querySelectorAll('.nav-tag svg');
+    expect(navIcons.length).toBe(component.visibleNavItems().length);
+  });
+
   it('should call AuthService.logout() when clicking Sair button (RF-05, CA-03)', () => {
     const logoutBtn = fixture.nativeElement.querySelector(
       '[data-testid="logout-button"]'
