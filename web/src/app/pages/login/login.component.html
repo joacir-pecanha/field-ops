@@ -1,0 +1,119 @@
+<div class="login-page">
+  <section class="login-brand-panel" aria-hidden="true">
+    <div class="brand-content">
+      <div class="brand-badge">
+        <span class="brand-dot"></span>
+        <span>FieldOps Admin</span>
+      </div>
+
+      <h1>Operações de campo sob controle em tempo real.</h1>
+      <p class="brand-subtitle">
+        Gerencie equipes, modelos de checklist versionados, agendamentos e revisão técnica de
+        inspeções em um único painel.
+      </p>
+
+      <ul class="brand-highlights">
+        <li>
+          <strong>Acesso por Perfil</strong>
+          <span>Administradores e Supervisores com governança e auditoria.</span>
+        </li>
+        <li>
+          <strong>Fluxo Offline-First Integrado</strong>
+          <span>Sincronização segura com o aplicativo móvel dos técnicos.</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <main class="login-form-panel">
+    <div class="login-card">
+      <header class="card-header">
+        <div class="mobile-brand">FieldOps</div>
+        <h2>Entrar no Painel Administrativo</h2>
+        <p>Informe suas credenciais corporativas para acessar o sistema.</p>
+      </header>
+
+      @if (banner(); as feedback) {
+        <div
+          class="feedback-banner"
+          [class.banner-error]="feedback.severity === 'error'"
+          [class.banner-warning]="feedback.severity === 'warning'"
+          [class.banner-network]="feedback.severity === 'network'"
+          role="alert"
+          aria-live="polite"
+        >
+          <div class="banner-title">{{ feedback.title }}</div>
+          <p class="banner-message">{{ feedback.message }}</p>
+        </div>
+      }
+
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" novalidate class="login-form">
+        <div class="form-field">
+          <label for="email">E-mail corporativo</label>
+          <input
+            id="email"
+            type="email"
+            formControlName="email"
+            autocomplete="email"
+            placeholder="nome@empresa.com"
+            [class.input-invalid]="isFieldInvalid('email')"
+            [attr.aria-invalid]="isFieldInvalid('email')"
+          />
+          @if (hasFieldError('email', 'required')) {
+            <span class="field-error" role="alert">O e-mail é obrigatório.</span>
+          } @else if (hasFieldError('email', 'email')) {
+            <span class="field-error" role="alert">Informe um endereço de e-mail válido.</span>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="password">Senha</label>
+          <div class="password-wrapper">
+            <input
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              autocomplete="current-password"
+              placeholder="Digite sua senha"
+              [class.input-invalid]="isFieldInvalid('password')"
+              [attr.aria-invalid]="isFieldInvalid('password')"
+            />
+            <button
+              type="button"
+              class="toggle-password-btn"
+              (click)="togglePasswordVisibility()"
+              [attr.aria-label]="showPassword() ? 'Ocultar senha' : 'Mostrar senha'"
+            >
+              {{ showPassword() ? 'Ocultar' : 'Mostrar' }}
+            </button>
+          </div>
+          @if (hasFieldError('password', 'required')) {
+            <span class="field-error" role="alert">A senha é obrigatória.</span>
+          }
+        </div>
+
+        <button
+          type="submit"
+          class="submit-btn"
+          [disabled]="isSubmitDisabled()"
+          [attr.aria-busy]="isLoading()"
+        >
+          @if (isLoading()) {
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Autenticando...</span>
+          } @else {
+            <span>Entrar no sistema</span>
+          }
+        </button>
+      </form>
+
+      <footer class="card-footer">
+        <p>
+          Técnicos de campo devem realizar o login exclusivamente pelo aplicativo
+          <strong>FieldOps Mobile</strong>.
+        </p>
+      </footer>
+    </div>
+  </main>
+</div>
+

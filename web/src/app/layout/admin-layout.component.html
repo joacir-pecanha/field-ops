@@ -1,0 +1,95 @@
+<div class="admin-shell">
+  @if (sidebarOpen()) {
+    <div class="sidebar-backdrop" (click)="closeSidebar()" aria-hidden="true"></div>
+  }
+
+  <aside class="sidebar" [class.sidebar-open]="sidebarOpen()" aria-label="Navegação principal">
+    <div class="sidebar-brand">
+      <div class="brand-mark">FO</div>
+      <div>
+        <div class="brand-name">FieldOps</div>
+        <div class="brand-caption">Administração</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      @for (item of visibleNavItems(); track item.route) {
+        <a
+          [routerLink]="item.route"
+          routerLinkActive="nav-link-active"
+          class="nav-link"
+          (click)="closeSidebar()"
+        >
+          <span class="nav-tag">{{ item.shortTag }}</span>
+          <span class="nav-label">{{ item.label }}</span>
+        </a>
+      }
+    </nav>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button
+          type="button"
+          class="menu-toggle-btn"
+          (click)="toggleSidebar()"
+          aria-label="Alternar menu de navegação"
+        >
+          Menu
+        </button>
+        <span class="env-badge">{{ envLabel }}</span>
+      </div>
+
+      <div class="topbar-right">
+        @if (currentUser(); as user) {
+          <div class="user-summary" data-testid="header-user-info">
+            <div class="user-avatar" aria-hidden="true">{{ userInitials() }}</div>
+            <div class="user-meta">
+              <span class="user-name">{{ user.name }}</span>
+              <span class="user-role">{{ roleLabel() }}</span>
+            </div>
+          </div>
+        }
+
+        <button
+          type="button"
+          class="logout-btn"
+          (click)="onLogout()"
+          [disabled]="isLoggingOut()"
+          data-testid="logout-button"
+        >
+          {{ isLoggingOut() ? 'Saindo...' : 'Sair' }}
+        </button>
+      </div>
+    </header>
+
+    @if (notifications().length > 0) {
+      <section class="notification-stack" aria-live="polite" aria-label="Mensagens do sistema">
+        @for (item of notifications(); track item.id) {
+          <div class="notification-item" [class]="'notification-' + item.type" role="alert">
+            <div class="notification-content">
+              @if (item.title) {
+                <strong>{{ item.title }}</strong>
+              }
+              <span>{{ item.message }}</span>
+            </div>
+            <button
+              type="button"
+              class="notification-close"
+              (click)="dismissNotification(item.id)"
+              aria-label="Fechar notificação"
+            >
+              ×
+            </button>
+          </div>
+        }
+      </section>
+    }
+
+    <main class="main-content">
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
