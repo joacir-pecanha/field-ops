@@ -1,0 +1,295 @@
+<section class="master-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Modelos de Inspeção</h1>
+      <p>
+        Crie rascunhos de checklist, organize seções e itens e publique versões imutáveis para uso
+        em campo.
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <a
+        routerLink="/app/inspection-templates/new"
+        class="btn btn-primary"
+        data-testid="new-template-btn"
+      >
+        + Novo Modelo
+      </a>
+    </div>
+  </header>
+
+  <section class="filters-card">
+    <form class="filters-grid" (ngSubmit)="applyFilters()">
+      <div class="filter-field">
+        <label for="templates-search">Buscar</label>
+        <input
+          id="templates-search"
+          name="search"
+          type="text"
+          [(ngModel)]="searchFilter"
+          placeholder="Título, código, categoria ou descrição..."
+          data-testid="templates-search-input"
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="templates-category">Categoria</label>
+        <select
+          id="templates-category"
+          name="category"
+          [(ngModel)]="categoryFilter"
+          (change)="applyFilters()"
+          data-testid="templates-category-filter"
+        >
+          <option value="">Todas as categorias</option>
+          @for (cat of categoryOptions; track cat.value) {
+            <option [value]="cat.value">{{ cat.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="templates-status">Status</label>
+        <select
+          id="templates-status"
+          name="status"
+          [(ngModel)]="statusFilter"
+          (change)="applyFilters()"
+          data-testid="templates-status-filter"
+        >
+          <option value="">Todos os status</option>
+          <option value="DRAFT">Rascunho</option>
+          <option value="PUBLISHED">Publicado</option>
+          <option value="INACTIVE">Inativo</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary" data-testid="templates-filter-submit">
+          Filtrar
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          (click)="clearFilters()"
+          data-testid="templates-filter-clear"
+        >
+          Limpar
+        </button>
+      </div>
+    </form>
+  </section>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar modelos de inspeção</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadTemplates()">
+        Tentar novamente
+      </button>
+    </div>
+  }
+
+  <article class="table-card">
+    @if (loading()) {
+      <div class="skeleton-list" aria-label="Carregando modelos de inspeção">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    } @else if (pageData().content.length === 0) {
+      <div class="empty-state" data-testid="templates-empty-state">
+        <h3>Nenhum modelo encontrado</h3>
+        <p>
+          Ajuste os filtros de busca, categoria ou status, ou crie o primeiro modelo de checklist.
+        </p>
+        <a routerLink="/app/inspection-templates/new" class="btn btn-primary">
+          + Criar Primeiro Modelo
+        </a>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('code')">
+                  <span>Código</span>
+                  <span class="sort-indicator">{{ sortIcon('code') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('title')">
+                  <span>Modelo</span>
+                  <span class="sort-indicator">{{ sortIcon('title') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('category')">
+                  <span>Categoria</span>
+                  <span class="sort-indicator">{{ sortIcon('category') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('version')">
+                  <span>Versão</span>
+                  <span class="sort-indicator">{{ sortIcon('version') }}</span>
+                </button>
+              </th>
+              <th>Estrutura</th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('status')">
+                  <span>Status</span>
+                  <span class="sort-indicator">{{ sortIcon('status') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('updatedAt')">
+                  <span>Atualizado em</span>
+                  <span class="sort-indicator">{{ sortIcon('updatedAt') }}</span>
+                </button>
+              </th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (template of pageData().content; track template.id) {
+              <tr data-testid="template-row">
+                <td>
+                  @if (template.code) {
+                    <span class="code-chip">{{ template.code }}</span>
+                  } @else {
+                    <span>—</span>
+                  }
+                </td>
+                <td>
+                  <div class="cell-primary">{{ template.title }}</div>
+                  @if (template.description) {
+                    <div class="cell-secondary">{{ template.description }}</div>
+                  }
+                </td>
+                <td>
+                  <span class="category-tag">{{ categoryLabel(template.category) }}</span>
+                </td>
+                <td>
+                  @if (template.status === 'DRAFT' && template.currentVersion > 0) {
+                    <span class="version-pill">Rascunho v{{ template.version }}</span>
+                    <span class="version-sub">Publicada ativa: v{{ template.currentVersion }}</span>
+                  } @else if (template.currentVersion > 0) {
+                    <span class="version-pill">v{{ template.currentVersion }}</span>
+                  } @else {
+                    <span class="version-pill">v{{ template.version || 1 }} (inicial)</span>
+                  }
+                </td>
+                <td>
+                  <div class="structure-meta">
+                    <span class="structure-chip">
+                      {{ template.totalSections }}
+                      {{ template.totalSections === 1 ? 'seção' : 'seções' }}
+                    </span>
+                    <span class="structure-chip">
+                      {{ template.totalItems }}
+                      {{ template.totalItems === 1 ? 'item' : 'itens' }}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.badge-draft]="template.status === 'DRAFT'"
+                    [class.badge-published]="template.status === 'PUBLISHED'"
+                    [class.badge-inactive]="template.status === 'INACTIVE'"
+                  >
+                    {{ statusLabel(template.status) }}
+                  </span>
+                </td>
+                <td>{{ template.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+                <td>
+                  <div class="row-actions">
+                    <a
+                      [routerLink]="['/app/inspection-templates', template.id, 'edit']"
+                      class="btn btn-secondary btn-sm"
+                      data-testid="open-template-builder-btn"
+                    >
+                      {{ template.status === 'DRAFT' ? 'Editar Rascunho' : 'Abrir Construtor' }}
+                    </a>
+
+                    <a
+                      [routerLink]="['/app/inspection-templates', template.id, 'preview']"
+                      class="btn btn-secondary btn-sm"
+                      data-testid="open-template-preview-btn"
+                    >
+                      Prévia
+                    </a>
+
+                    @if (template.status === 'PUBLISHED') {
+                      <button
+                        type="button"
+                        class="btn btn-teal-outline btn-sm"
+                        (click)="startNewVersion(template)"
+                        [disabled]="creatingVersionId() === template.id || actionBusy()"
+                        data-testid="new-version-row-btn"
+                      >
+                        {{ creatingVersionId() === template.id ? 'Criando...' : 'Nova Versão' }}
+                      </button>
+                    }
+
+                    @if (template.active) {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(template)"
+                        [disabled]="actionBusy()"
+                        data-testid="deactivate-template-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateTemplate(template)"
+                        [disabled]="actionBusy()"
+                        data-testid="activate-template-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination
+        [page]="pageData().page"
+        [size]="pageData().size"
+        [totalElements]="pageData().totalElements"
+        [totalPages]="pageData().totalPages"
+        [first]="pageData().first"
+        [last]="pageData().last"
+        [disabled]="loading()"
+        (pageChange)="onPageChange($event)"
+        (sizeChange)="onSizeChange($event)"
+      />
+    }
+  </article>
+
+  <app-confirm-modal
+    [open]="confirmDeactivateTarget() !== null"
+    title="Confirmar inativação do modelo"
+    [entityLabel]="confirmDeactivateTarget()?.title || ''"
+    message="Deseja realmente inativar este modelo de inspeção? O histórico de versões e as inspeções já agendadas permanecerão preservados."
+    impactWarning="Modelos inativos não podem ser selecionados para novas inspeções e não permitem edição até serem reativados (RN-022)."
+    confirmLabel="Confirmar Inativação"
+    [loading]="actionBusy()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
+</section>

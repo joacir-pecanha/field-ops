@@ -1,0 +1,571 @@
+<section class="builder-page">
+  <header class="builder-topbar">
+    <div class="topbar-title-block">
+      <a routerLink="/app/inspection-templates" class="breadcrumb-back">
+        ← Voltar para Modelos de Inspeção
+      </a>
+
+      <div class="title-row">
+        <h1>
+          @if (loadedTemplate(); as tpl) {
+            {{ tpl.title }}
+          } @else {
+            Novo Modelo de Inspeção
+          }
+        </h1>
+
+        @if (loadedTemplate(); as tpl) {
+          <span
+            class="status-badge"
+            [class.badge-draft]="tpl.status === 'DRAFT'"
+            [class.badge-published]="tpl.status === 'PUBLISHED'"
+            [class.badge-inactive]="tpl.status === 'INACTIVE'"
+            data-testid="builder-status-badge"
+          >
+            @if (tpl.status === 'PUBLISHED') {
+              Publicado (v{{ tpl.currentVersion }} — Imutável)
+            } @else if (tpl.status === 'DRAFT') {
+              Rascunho (v{{ tpl.version || 1 }})
+            } @else {
+              Inativo
+            }
+          </span>
+        } @else {
+          <span class="status-badge badge-draft" data-testid="builder-status-badge">
+            Novo Rascunho
+          </span>
+        }
+
+        @if (hasUnsavedChanges()) {
+          <span class="unsaved-pill" data-testid="unsaved-changes-indicator">
+            Alterações não salvas
+          </span>
+        }
+      </div>
+
+      <p class="topbar-subtitle">
+        Estruture seções, configure tipos de resposta e defina regras de não conformidade antes da
+        publicação.
+      </p>
+    </div>
+
+    <div class="topbar-actions">
+      @if (isEditable()) {
+        <button
+          type="button"
+          class="btn btn-secondary"
+          (click)="saveDraft()"
+          [disabled]="loading() || saving() || publishing()"
+          data-testid="save-draft-btn"
+        >
+          @if (saving()) {
+            <span class="inline-spinner" aria-hidden="true"></span>
+            <span>Salvando...</span>
+          } @else {
+            <span>Salvar Rascunho</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="openPublishConfirm()"
+          [disabled]="
+            loading() || saving() || publishing() || publishPendencies().length > 0
+          "
+          data-testid="publish-version-btn"
+        >
+          @if (publishing()) {
+            <span class="inline-spinner" aria-hidden="true"></span>
+            <span>Publicando...</span>
+          } @else {
+            <span>Publicar Versão</span>
+          }
+        </button>
+      } @else if (loadedTemplate()?.status === 'PUBLISHED') {
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="createNewVersion()"
+          [disabled]="creatingVersion() || loading()"
+          data-testid="create-new-version-btn"
+        >
+          @if (creatingVersion()) {
+            <span class="inline-spinner" aria-hidden="true"></span>
+            <span>Criando Nova Versão...</span>
+          } @else {
+            <span>Criar Nova Versão</span>
+          }
+        </button>
+      } @else if (loadedTemplate()?.status === 'INACTIVE') {
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="reactivateTemplate()"
+          [disabled]="reactivating() || loading()"
+          data-testid="reactivate-template-btn"
+        >
+          {{ reactivating() ? 'Reativando...' : 'Reativar Modelo' }}
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (versions().length > 0) {
+    <section class="version-bar" aria-label="Histórico de versões">
+      <span class="version-bar-label">Histórico de Versões</span>
+      <div class="version-pills">
+        @for (ver of versions(); track ver.id) {
+          <button
+            type="button"
+            class="version-tab"
+            [class.version-tab-active]="selectedVersionNumber() === ver.versionNumber"
+            (click)="selectVersion(ver)"
+            data-testid="version-tab-btn"
+          >
+            <span>v{{ ver.versionNumber }}</span>
+            <span>({{ statusLabel(ver.status) }})</span>
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar modelo</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <div class="header-actions">
+        @if (templateId(); as id) {
+          <button type="button" class="btn btn-secondary btn-sm" (click)="loadTemplate(id)">
+            Tentar novamente
+          </button>
+        }
+        <a routerLink="/app/inspection-templates" class="btn btn-secondary btn-sm">Voltar</a>
+      </div>
+    </div>
+  }
+
+  @if (viewingHistoricalVersion()) {
+    <div class="alert-banner alert-info" role="note" data-testid="historical-version-banner">
+      <div>
+        <strong>Visualizando versão histórica v{{ selectedVersionNumber() }} (somente leitura)</strong>
+        <p>
+          As versões publicadas são imutáveis para preservar os snapshots das inspeções existentes.
+        </p>
+      </div>
+      @if (latestDraftVersion(); as draft) {
+        <button type="button" class="btn btn-primary btn-sm" (click)="returnToDraftVersion()">
+          Voltar para Rascunho v{{ draft.versionNumber }}
+        </button>
+      }
+    </div>
+  } @else if (loadedTemplate()?.status === 'PUBLISHED') {
+    <div class="alert-banner alert-info" role="note" data-testid="published-readonly-banner">
+      <div>
+        <strong>Modelo Publicado — Edição direta bloqueada (EX-02)</strong>
+        <p>
+          Esta versão já está publicada e congelada para uso em campo. Clique em
+          <strong>Criar Nova Versão</strong> para iniciar um rascunho v{{
+            (loadedTemplate()?.currentVersion || 0) + 1
+          }}
+          sem alterar inspeções anteriores.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        (click)="createNewVersion()"
+        [disabled]="creatingVersion()"
+      >
+        Criar Nova Versão
+      </button>
+    </div>
+  } @else if (loadedTemplate()?.status === 'INACTIVE') {
+    <div class="alert-banner alert-warning" role="note">
+      <div>
+        <strong>Modelo Inativo</strong>
+        <p>Modelos inativos ficam bloqueados para edição e novos agendamentos até serem reativados.</p>
+      </div>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        (click)="reactivateTemplate()"
+        [disabled]="reactivating()"
+      >
+        Reativar Modelo
+      </button>
+    </div>
+  }
+
+  @if (formError()) {
+    <div class="alert-banner alert-error" role="alert" data-testid="builder-form-error">
+      <div>
+        <strong>Atenção</strong>
+        <p>{{ formError() }}</p>
+        @if (serverPendencies().length > 0) {
+          <ul class="pendencies-list">
+            @for (pendency of serverPendencies(); track pendency) {
+              <li>{{ pendency }}</li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  }
+
+  @if (isEditable() && publishPendencies().length > 0) {
+    <div class="alert-banner alert-warning" role="status" data-testid="publish-pendencies-banner">
+      <div>
+        <strong>Pendências para publicação ({{ publishPendencies().length }})</strong>
+        <p>
+          O botão <strong>Publicar Versão</strong> permanecerá desativado até que todos os itens
+          estejam completos:
+        </p>
+        <ul class="pendencies-list">
+          @for (pendency of publishPendencies(); track pendency) {
+            <li>{{ pendency }}</li>
+          }
+        </ul>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="table-card">
+      <div class="skeleton-list" aria-label="Carregando estrutura do modelo">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    </div>
+  } @else if (!loadError()) {
+    <div class="builder-mode-tabs" role="tablist" aria-label="Modo de visualização do construtor">
+      <button
+        type="button"
+        role="tab"
+        class="mode-tab-btn"
+        [class.mode-tab-active]="activeTab() === 'editor'"
+        [attr.aria-selected]="activeTab() === 'editor'"
+        (click)="setActiveTab('editor')"
+        data-testid="builder-mode-editor-btn"
+      >
+        Editor de Estrutura
+        <span class="mode-tab-meta">
+          {{ totalSectionsCount() }}/{{ totalItemsCount() }}
+        </span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="mode-tab-btn"
+        [class.mode-tab-active]="activeTab() === 'preview'"
+        [attr.aria-selected]="activeTab() === 'preview'"
+        (click)="setActiveTab('preview')"
+        data-testid="builder-mode-preview-btn"
+      >
+        Prévia do Checklist (Mobile)
+      </button>
+    </div>
+
+    @if (activeTab() === 'preview') {
+      <app-template-preview [template]="previewModel()" />
+    } @else {
+      <form class="builder-workspace" [formGroup]="form" novalidate>
+      <aside class="tree-panel" aria-label="Estrutura em árvore do modelo" data-testid="template-tree">
+        <div class="tree-header">
+          <div>
+            <h2>Árvore do Checklist</h2>
+            <span>
+              {{ totalSectionsCount() }}
+              {{ totalSectionsCount() === 1 ? 'seção' : 'seções' }} ·
+              {{ totalItemsCount() }}
+              {{ totalItemsCount() === 1 ? 'item' : 'itens' }}
+            </span>
+          </div>
+          @if (isEditable()) {
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              (click)="addSection(true)"
+              data-testid="tree-add-section-btn"
+            >
+              + Seção
+            </button>
+          }
+        </div>
+
+        <div class="tree-body">
+          @if (sectionsArray.controls.length === 0) {
+            <div class="tree-empty">
+              Nenhuma seção adicionada ainda. Use <strong>+ Seção</strong> para montar a árvore do
+              checklist.
+            </div>
+          } @else {
+            @for (sectionGroup of sectionsArray.controls; track sectionGroup; let sIdx = $index) {
+              <div
+                class="tree-section"
+                [class.tree-section-active]="selectedSectionGroup() === sectionGroup"
+                [class.tree-section-issue]="getSectionIssuesCount(sIdx) > 0"
+                data-testid="tree-section-node"
+              >
+                <div class="tree-section-row">
+                  <button
+                    type="button"
+                    class="tree-node-btn"
+                    (click)="focusSection(sIdx)"
+                  >
+                    <span class="tree-index">{{ sIdx + 1 }}</span>
+                    <span
+                      class="tree-title-text"
+                      [class.tree-title-placeholder]="!sectionGroup.controls.title.value.trim()"
+                    >
+                      {{ sectionGroup.controls.title.value.trim() || 'Seção sem título' }}
+                    </span>
+                    @if (getSectionIssuesCount(sIdx) > 0) {
+                      <span class="tree-issue-dot" title="Seção com pendências"></span>
+                    }
+                  </button>
+
+                  @if (isEditable()) {
+                    <button
+                      type="button"
+                      class="tree-quick-add"
+                      (click)="addItem(sIdx)"
+                      title="Adicionar item nesta seção"
+                      data-testid="tree-add-item-btn"
+                    >
+                      + Item
+                    </button>
+                  }
+                </div>
+
+                <div class="tree-items-list">
+                  @if (sectionGroup.controls.items.controls.length === 0) {
+                    <p class="tree-no-items">Nenhum item nesta seção</p>
+                  } @else {
+                    @for (
+                      itemGroup of sectionGroup.controls.items.controls;
+                      track itemGroup;
+                      let iIdx = $index
+                    ) {
+                      <button
+                        type="button"
+                        class="tree-item-btn"
+                        [class.tree-item-active]="selectedItemGroup() === itemGroup"
+                        [class.tree-item-issue]="getItemIssues(sIdx, iIdx).length > 0"
+                        (click)="focusItem(sIdx, iIdx)"
+                        data-testid="tree-item-node"
+                      >
+                        <span class="tree-item-main">
+                          <span class="tree-index">{{ sIdx + 1 }}.{{ iIdx + 1 }}</span>
+                          <span
+                            class="tree-item-label"
+                            [class.tree-title-placeholder]="!itemGroup.controls.title.value.trim()"
+                          >
+                            {{ itemGroup.controls.title.value.trim() || 'Item sem título' }}
+                          </span>
+                        </span>
+                        <span
+                          class="tree-type-tag"
+                          [class.tree-type-missing]="!itemGroup.controls.responseType.value"
+                        >
+                          {{ responseTypeBadge(itemGroup.controls.responseType.value) }}
+                        </span>
+                      </button>
+                    }
+                  }
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </aside>
+
+      <div class="builder-editor-column">
+        <article class="editor-card" data-testid="template-metadata-card">
+          <div class="card-section-header">
+            <div>
+              <h2>Dados Gerais do Modelo</h2>
+              <p>Identificação, categoria operacional e escopo do checklist.</p>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="template-title">Título do modelo *</label>
+              <input
+                id="template-title"
+                type="text"
+                formControlName="title"
+                placeholder="Ex.: Checklist Preventivo de Gerador Diesel"
+                [class.input-invalid]="isHeaderInvalid('title')"
+                (input)="onHeaderFieldInput('title')"
+                data-testid="template-title-input"
+              />
+              @if (isHeaderInvalid('title')) {
+                <span class="field-error">
+                  @if (form.controls.title.hasError('required')) {
+                    O título do modelo é obrigatório.
+                  } @else if (form.controls.title.hasError('maxlength')) {
+                    O título deve ter no máximo 200 caracteres.
+                  } @else if (form.controls.title.hasError('serverError')) {
+                    {{ form.controls.title.getError('serverError') }}
+                  }
+                </span>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="template-category">Categoria operacional *</label>
+              <select
+                id="template-category"
+                formControlName="category"
+                [class.input-invalid]="isHeaderInvalid('category')"
+                (change)="onHeaderFieldInput('category')"
+                data-testid="template-category-select"
+              >
+                <option value="">Selecione uma categoria...</option>
+                @for (cat of availableCategories(); track cat.value) {
+                  <option [value]="cat.value">{{ cat.label }}</option>
+                }
+              </select>
+              @if (isHeaderInvalid('category')) {
+                <span class="field-error">Selecione a categoria do modelo.</span>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="template-code">Código do modelo</label>
+              <input
+                id="template-code"
+                type="text"
+                formControlName="code"
+                placeholder="Ex.: TPL-GER-01"
+                [class.input-invalid]="isHeaderInvalid('code')"
+                (input)="onHeaderFieldInput('code')"
+                data-testid="template-code-input"
+              />
+              @if (isHeaderInvalid('code')) {
+                <span class="field-error">
+                  @if (form.controls.code.hasError('pattern')) {
+                    Use apenas letras, números, hífen (-) ou underscore (_).
+                  } @else if (form.controls.code.hasError('maxlength')) {
+                    O código deve ter no máximo 60 caracteres.
+                  } @else if (form.controls.code.hasError('serverError')) {
+                    {{ form.controls.code.getError('serverError') }}
+                  }
+                </span>
+              }
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="template-description">Descrição e orientações gerais</label>
+              <textarea
+                id="template-description"
+                rows="2"
+                formControlName="description"
+                placeholder="Descreva quando e como este modelo deve ser aplicado pelo técnico..."
+                [class.input-invalid]="isHeaderInvalid('description')"
+                (input)="onHeaderFieldInput('description')"
+                data-testid="template-description-input"
+              ></textarea>
+            </div>
+          </div>
+        </article>
+
+        <div class="sections-stack" formArrayName="sections">
+          @if (sectionsArray.controls.length === 0) {
+            <article class="editor-card">
+              <div class="empty-state" data-testid="builder-empty-sections">
+                <h3>Nenhuma seção cadastrada</h3>
+                <p>
+                  Comece adicionando a primeira seção do checklist para organizar os itens de
+                  inspeção.
+                </p>
+                @if (isEditable()) {
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    (click)="addSection(true)"
+                    data-testid="add-first-section-btn"
+                  >
+                    + Adicionar Primeira Seção
+                  </button>
+                }
+              </div>
+            </article>
+          } @else {
+            @for (sectionGroup of sectionsArray.controls; track sectionGroup; let sIdx = $index) {
+              <app-section-editor
+                [sectionGroup]="sectionGroup"
+                [sectionIndex]="sIdx"
+                [totalSections]="sectionsArray.length"
+                [editable]="isEditable()"
+                [selected]="selectedSectionGroup() === sectionGroup"
+                [collapsed]="isSectionCollapsed(sIdx)"
+                [submitted]="submitted()"
+                [domId]="getSectionDomId(sectionGroup)"
+                [selectedItemGroup]="selectedItemGroup()"
+                [getItemDomId]="getItemDomIdFn"
+                (toggleCollapse)="toggleSectionCollapse(sIdx)"
+                (moveUp)="moveSection(sIdx, -1)"
+                (moveDown)="moveSection(sIdx, 1)"
+                (duplicate)="duplicateSection(sIdx)"
+                (remove)="removeSection(sIdx)"
+                (addItem)="addItem(sIdx)"
+                (moveItem)="moveItem(sIdx, $event.itemIndex, $event.delta)"
+                (duplicateItem)="duplicateItem(sIdx, $event)"
+                (removeItem)="removeItem(sIdx, $event)"
+                (itemResponseTypeChanged)="onResponseTypeChange(sIdx, $event)"
+                (structureChanged)="onSectionStructureChanged()"
+              />
+            }
+
+            @if (isEditable()) {
+              <div class="add-section-bar">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="addSection(true)"
+                  data-testid="add-section-btn"
+                >
+                  + Adicionar Nova Seção
+                </button>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </form>
+    }
+  }
+
+  <app-confirm-modal
+    [open]="publishConfirmOpen()"
+    title="Confirmar publicação da versão"
+    [entityLabel]="form.controls.title.value || 'Modelo de Inspeção'"
+    message="Deseja realmente publicar esta versão do modelo de inspeção? Após publicada, ela ficará imediatamente disponível para agendamento e não poderá mais ter seus itens alterados diretamente."
+    impactWarning="Versões publicadas são imutáveis para garantir rastreabilidade dos snapshots de inspeção (RN-019, RN-020). Alterações futuras exigirão criar uma nova versão."
+    confirmLabel="Confirmar Publicação"
+    cancelLabel="Revisar Rascunho"
+    [loading]="publishing()"
+    (confirmed)="confirmPublish()"
+    (cancelled)="cancelPublishConfirm()"
+  />
+
+  <app-confirm-modal
+    [open]="discardConfirmOpen()"
+    title="Alterações não salvas no rascunho"
+    [entityLabel]="form.controls.title.value || 'Rascunho em edição'"
+    message="Existem alterações no rascunho que ainda não foram salvas. Se sair agora, todas as modificações pendentes serão perdidas."
+    impactWarning=""
+    confirmLabel="Descartar Alterações"
+    cancelLabel="Continuar Editando"
+    (confirmed)="confirmDiscardAndProceed()"
+    (cancelled)="cancelDiscardPrompt()"
+  />
+</section>

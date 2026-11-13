@@ -5,6 +5,7 @@ import { AdminLayoutComponent } from './layout/admin-layout.component';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { LoginComponent } from './pages/login/login.component';
 import { ModulePlaceholderComponent } from './pages/module-placeholder/module-placeholder.component';
+import { pendingChangesGuard } from './pages/templates/template-builder.component';
 
 export const routes: Routes = [
   {
@@ -93,13 +94,42 @@ export const routes: Routes = [
       },
       {
         path: 'inspection-templates',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN', 'SUPERVISOR'],
-          title: 'Modelos de Inspeção',
-          description: 'Construtor de checklists dinâmicos e versionamento (TASK-010).',
-        },
-        title: 'Modelos — FieldOps Admin',
+        loadComponent: () =>
+          import('./pages/templates/template-list.component').then(
+            (m) => m.TemplateListComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Modelos de Inspeção — FieldOps Admin',
+      },
+      {
+        path: 'inspection-templates/new',
+        loadComponent: () =>
+          import('./pages/templates/template-builder.component').then(
+            (m) => m.TemplateBuilderComponent
+          ),
+        canDeactivate: [pendingChangesGuard],
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Novo Modelo — FieldOps Admin',
+      },
+      {
+        path: 'inspection-templates/:templateId/edit',
+        loadComponent: () =>
+          import('./pages/templates/template-builder.component').then(
+            (m) => m.TemplateBuilderComponent
+          ),
+        canDeactivate: [pendingChangesGuard],
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Editor de Modelo — FieldOps Admin',
+      },
+      {
+        path: 'inspection-templates/:templateId/preview',
+        loadComponent: () =>
+          import('./pages/templates/template-builder.component').then(
+            (m) => m.TemplateBuilderComponent
+          ),
+        canDeactivate: [pendingChangesGuard],
+        data: { roles: ['ADMIN', 'SUPERVISOR'], initialTab: 'preview' },
+        title: 'Prévia do Modelo — FieldOps Admin',
       },
       {
         path: 'inspections',
