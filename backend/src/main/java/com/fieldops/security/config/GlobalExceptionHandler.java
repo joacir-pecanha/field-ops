@@ -7,6 +7,7 @@ import com.fieldops.modules.master.domain.UserStatus;
 import com.fieldops.modules.master.exception.BusinessRuleException;
 import com.fieldops.modules.master.exception.DuplicateResourceException;
 import com.fieldops.modules.master.exception.ResourceNotFoundException;
+import com.fieldops.modules.template.exception.TemplatePublishValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -154,6 +155,24 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(TemplatePublishValidationException.class)
+    public ResponseEntity<ProblemDetail> handleTemplatePublishValidation(
+            TemplatePublishValidationException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Publicação de template bloqueada ({}) em {}", ex.getCode(), request.getRequestURI());
+        ProblemDetail problem = createProblemDetail(
+                HttpStatus.BAD_REQUEST,
+                "template-publish-validation",
+                "Pendências impedem a publicação do modelo",
+                ex.getMessage(),
+                ex.getCode(),
+                request
+        );
+        problem.setProperty("pendencies", ex.getPendencies());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(
             DataIntegrityViolationException ex,
@@ -179,6 +198,12 @@ public class GlobalExceptionHandler {
         } else if (normalized.contains("uq_sites_client_code")) {
             code = "DUPLICATE_SITE_CODE";
             detail = "Já existe um local cadastrado com este código para o cliente selecionado.";
+        } else if (normalized.contains("uq_inspection_templates_code")) {
+            code = "DUPLICATE_TEMPLATE_CODE";
+            detail = "Já existe um modelo de inspeção cadastrado com o código informado.";
+        } else if (normalized.contains("uq_template_versions_template_version")) {
+            code = "DUPLICATE_TEMPLATE_VERSION";
+            detail = "Já existe uma versão com este número para o modelo informado.";
         }
 
         log.warn("Violação de integridade ({}) em {}", code, request.getRequestURI());
