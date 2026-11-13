@@ -5,13 +5,16 @@ import { RouterLink } from '@angular/router';
 import { ClientsApiService } from '../../core/master/clients-api.service';
 import { uniqueClientCodeValidator } from '../../core/master/master-async.validators';
 import {
+  ClientRequest,
   ClientResponse,
   MasterDataApiError,
   MasterStatus,
   PageResponse,
   normalizeOptionalText,
 } from '../../core/master/master-data.models';
+import { SitesApiService } from '../../core/master/sites-api.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { ConfirmModalComponent } from '../../shared/components/confirm-modal/confirm-modal.component';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import {
   applyServerFieldErrors,
@@ -24,21 +27,33 @@ import {
 @Component({
   selector: 'app-clients-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, PaginationComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    RouterLink,
+    PaginationComponent,
+    ConfirmModalComponent,
+  ],
   templateUrl: './clients-list.component.html',
 })
 export class ClientsListComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly clientsApi = inject(ClientsApiService);
+  private readonly sitesApi = inject(SitesApiService);
   private readonly notifications = inject(NotificationService);
 
   readonly loading = signal(false);
   readonly saving = signal(false);
+  readonly deactivating = signal(false);
   readonly loadError = signal<string | null>(null);
   readonly formError = signal<string | null>(null);
   readonly formOpen = signal(false);
   readonly submitted = signal(false);
   readonly editingClient = signal<ClientResponse | null>(null);
+  readonly confirmTarget = signal<ClientResponse | null>(null);
+  readonly pendingFormPayload = signal<ClientRequest | null>(null);
+  readonly confirmAlertBanner = signal<string | null>(null);
 
   readonly pageData = signal<PageResponse<ClientResponse>>({
     content: [],
@@ -205,7 +220,7 @@ export class ClientsListComponent implements OnInit {
 
     const raw = this.form.getRawValue();
     const editing = this.editingClient();
-    const payload = {
+    const payload: ClientRequest = {
       code: normalizeOptionalText(raw.code),
       name: raw.name.trim(),
       legalName: normalizeOptionalText(raw.legalName),
@@ -215,6 +230,118 @@ export class ClientsListComponent implements OnInit {
       status: raw.status,
     };
 
+    if (editing && editing.active && payload.status === 'INACTIVE') {
+      this.openDeactivateConfirm(editing, payload);
+      return;
+    }
+
+    this.executeSave(editing, payload);
+  }
+
+  requestDeactivate(client: ClientResponse): void {
+    this.openDeactivateConfirm(client, null);
+  }
+
+  reactivateClient(client: ClientResponse): void {
+    if (this.deactivating()) {
+      return;
+    }
+    this.deactivating.set(true);
+    this.clientsApi.activate(client.id).subscribe({
+      next: (saved) => {
+        this.deactivating.set(false);
+        this.notifications.showSuccess(`Cliente "${saved.name}" reativado com sucesso.`);
+        this.loadClients();
+      },
+      error: (err: unknown) => {
+        this.deactivating.set(false);
+        const message =
+          err instanceof MasterDataApiError
+            ? err.message
+            : 'Não foi possível reativar o cliente.';
+        this.notifications.showError(message);
+      },
+    });
+  }
+
+  cancelDeactivate(): void {
+    if (this.deactivating() || this.saving()) {
+      return;
+    }
+    this.confirmTarget.set(null);
+    this.pendingFormPayload.set(null);
+    this.confirmAlertBanner.set(null);
+  }
+
+  confirmDeactivate(): void {
+    const target = this.confirmTarget();
+    const formPayload = this.pendingFormPayload();
+    if (!target || this.deactivating() || this.saving()) {
+      return;
+    }
+
+    if (formPayload) {
+      this.confirmTarget.set(null);
+      this.pendingFormPayload.set(null);
+      this.confirmAlertBanner.set(null);
+      this.executeSave(target, formPayload);
+      return;
+    }
+
+    this.deactivating.set(true);
+    this.clientsApi.deactivate(target.id).subscribe({
+      next: (saved) => {
+        this.deactivating.set(false);
+        this.confirmTarget.set(null);
+        this.confirmAlertBanner.set(null);
+        this.notifications.showSuccess(`Cliente "${saved.name}" inativado com sucesso.`);
+        this.loadClients();
+      },
+      error: (err: unknown) => {
+        this.deactivating.set(false);
+        const message =
+          err instanceof MasterDataApiError
+            ? err.message
+            : 'Não foi possível inativar o cliente.';
+        this.notifications.showError(message);
+      },
+    });
+  }
+
+  private openDeactivateConfirm(client: ClientResponse, formPayload: ClientRequest | null): void {
+    this.confirmTarget.set(client);
+    this.pendingFormPayload.set(formPayload);
+    this.confirmAlertBanner.set(
+      'Verificando unidades/locais ativos e possíveis inspeções em andamento vinculados a este cliente...'
+    );
+
+    this.sitesApi.listByClient(client.id, true, 100).subscribe({
+      next: (activeSites) => {
+        if (this.confirmTarget()?.id !== client.id) {
+          return;
+        }
+        if (activeSites.length > 0) {
+          this.confirmAlertBanner.set(
+            `Este cliente possui ${activeSites.length} local(is) ativo(s) vinculado(s) e pode conter inspeções ativas em andamento. Ao inativá-lo, nenhum novo local, equipamento ou inspeção poderá ser associado a ele.`
+          );
+        } else {
+          this.confirmAlertBanner.set(
+            'Este cliente pode possuir inspeções ativas ou histórico vinculado. Ao inativá-lo, novos agendamentos ficarão bloqueados (RN-013).'
+          );
+        }
+      },
+      error: () => {
+        if (this.confirmTarget()?.id !== client.id) {
+          return;
+        }
+        this.confirmAlertBanner.set(
+          'Este cliente pode possuir locais ou inspeções ativas vinculadas. Confirme para prosseguir com a inativação lógica.'
+        );
+      },
+    });
+  }
+
+  private executeSave(editing: ClientResponse | null, payload: ClientRequest): void {
     this.saving.set(true);
     const request$ = editing
       ? this.clientsApi.update(editing.id, payload)

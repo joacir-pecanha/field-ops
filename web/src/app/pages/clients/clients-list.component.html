@@ -301,6 +301,27 @@
                     <button type="button" class="btn btn-secondary btn-sm" (click)="openEditForm(client)">
                       Editar
                     </button>
+                    @if (client.active) {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(client)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-client-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateClient(client)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-client-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
                   </div>
                 </td>
               </tr>
@@ -322,5 +343,18 @@
       />
     }
   </article>
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    title="Confirmar inativação de cliente"
+    [entityLabel]="confirmTarget()?.name || ''"
+    message="Deseja realmente inativar este cliente? Ele não será excluído fisicamente, mas ficará bloqueado para novos locais, equipamentos e inspeções."
+    [alertBannerText]="confirmAlertBanner()"
+    [requireExtraConfirmation]="true"
+    confirmLabel="Confirmar Inativação"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
 </section>
 

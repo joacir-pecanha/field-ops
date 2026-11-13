@@ -297,6 +297,27 @@
                     <button type="button" class="btn btn-secondary btn-sm" (click)="openEditForm(user)">
                       Editar
                     </button>
+                    @if (user.status === 'ACTIVE') {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(user)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-user-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateUser(user)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-user-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
                   </div>
                 </td>
               </tr>
@@ -318,5 +339,17 @@
       />
     }
   </article>
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    [title]="pendingFormUpdate()?.status === 'BLOCKED' ? 'Confirmar bloqueio de usuário' : 'Confirmar inativação de usuário'"
+    [entityLabel]="confirmTarget() ? confirmTarget()!.name + ' (' + confirmTarget()!.email + ')' : ''"
+    message="Deseja realmente revogar o acesso ativo deste usuário? Todas as sessões JWT/refresh ativas serão encerradas imediatamente (RN-008)."
+    impactWarning="Usuários inativos ou bloqueados ficam impedidos de iniciar novas sessões e de receber novas inspeções (RN-001, RN-027). Registros históricos e auditoria permanecem intactos (RN-002)."
+    [confirmLabel]="pendingFormUpdate()?.status === 'BLOCKED' ? 'Confirmar Bloqueio' : 'Confirmar Inativação'"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
 </section>
 

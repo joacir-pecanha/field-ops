@@ -8,7 +8,7 @@
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/mobile/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/mobile/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente (Checkpoint Passo 3 aguardando validação humana)
+- **Data de Conclusão:** Pendente (Checkpoint Passos 4 e 5 aguardando validação humana)
 
 ---
 
@@ -32,8 +32,11 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
 - `web/src/app/pages/equipment/equipment-list.component.ts` / `.html` (Gestão de equipamentos)
 - `web/src/app/shared/components/pagination/pagination.component.ts` (Componente de paginação)
 - `web/src/app/shared/styles/master-crud.scss` & `web/src/app/shared/utils/form-error.utils.ts` (Estilos compartilhados e utilitários de formulário)
-- `web/src/app/pages/equipment/components/qr-code-modal.component.ts` *(Pendente — Passo 4)*
-- `web/src/app/shared/components/confirm-modal/confirm-modal.component.ts` *(Pendente — Passo 5)*
+- `web/src/app/pages/equipment/components/qr-code-modal.component.ts` *(Passo 4 — Modal QR Code Canvas HD / SVG / PNG / Impressão)*
+- `web/src/app/pages/equipment/components/qr-code-modal.component.spec.ts` *(Testes unitários do componente de QR Code)*
+- `web/src/app/shared/components/confirm-modal/confirm-modal.component.ts` *(Passo 5 — Modal reutilizável de confirmação de inativação com suporte EX-01)*
+- `web/src/app/shared/components/confirm-modal/confirm-modal.component.spec.ts` *(Testes unitários do modal de confirmação)*
+- `web/package.json` & `web/angular.json` *(Dependência `qrcode` / `@types/qrcode` e whitelist CommonJS)*
 - `backend/src/main/java/com/fieldops/config/OpenApiConfig.java` & `DevBootstrapSeedConfig.java` (Swagger UI interativo e massa inicial de validação)
 
 ---
@@ -62,17 +65,17 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
 - [x] **Passo 1:** Criar serviços HTTP no frontend para consumo dos endpoints de Users, Clients, Sites e Equipment.
 - [x] **Passo 2:** Implementar interface Swagger para validação humana e testes do funcionamento destes endpoints (com paginação e tabelas ordenáveis integradas à API).
 - [x] **Passo 3:** Desenvolver formulários reativos para criação e edição com validações assíncronas.
-- [ ] **Passo 4:** Implementar componente de geração de QR Code usando biblioteca de renderização em Canvas/SVG (ex: `qrcode`). *(Aguardando validação humana dos Passos 1–3)*
-- [ ] **Passo 5:** Integrar modais de confirmação para ações críticas de inativação. *(Aguardando validação humana dos Passos 1–3)*
-- [ ] **Passo 6:** Escrever testes de componentes para as telas de listagem e formulários. *(Aguardando validação humana dos Passos 1–3)*
+- [x] **Passo 4:** Implementar componente de geração de QR Code usando biblioteca de renderização em Canvas/SVG (ex: `qrcode`).
+- [x] **Passo 5:** Integrar modais de confirmação para ações críticas de inativação.
+- [ ] **Passo 6:** Escrever testes de componentes para as telas de listagem e formulários. *(Aguardando validação humana dos Passos 4–5)*
 
 ---
 
 ## 6. Critérios de Aceitação (Definition of Done)
-- [ ] **CA-01:** Administrador consegue cadastrar um fluxo completo: Cliente -> Local -> Equipamento com QR Code gerado.
-- [ ] **CA-02:** Seleção de Local filtra automaticamente apenas os equipamentos vinculados a ele. *(Filtro encadeado entregue no Passo 3)*
-- [ ] **CA-03:** O QR Code gerado pode ser visualizado e impresso em alta definição. *(Passo 4)*
-- [ ] **CA-04:** Nenhuma ação crítica de inativação ocorre sem diálogo de confirmação. *(Passo 5)*
+- [x] **CA-01:** Administrador consegue cadastrar um fluxo completo: Cliente -> Local -> Equipamento com QR Code gerado.
+- [x] **CA-02:** Seleção de Local filtra automaticamente apenas os equipamentos vinculados a ele. *(Filtro encadeado entregue no Passo 3)*
+- [x] **CA-03:** O QR Code gerado pode ser visualizado e impresso em alta definição.
+- [x] **CA-04:** Nenhuma ação crítica de inativação ocorre sem diálogo de confirmação.
 - [ ] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
@@ -104,3 +107,25 @@ Supervisores e administradores necessitam de uma interface eficiente para cadast
     3. Abrir **Swagger / API** (`/app/api-docs`) para testar os endpoints diretamente pelos serviços ou abrir `http://localhost:8080/swagger-ui.html` colando o JWT copiado em **Authorize**.
     4. Validar layout, responsividade, paginação, busca, filtros encadeados e validações em tempo real/assíncronas em **Usuários**, **Clientes**, **Locais** e **Equipamentos** (incluindo teste de colisão digitando `QR-FIELDOPS-GD001` no campo QR Code).
     5. Após sua aprovação de design e comportamento, seguiremos para os **Passos 4, 5 e 6** (Modal de QR Code em alta definição + impressão/download, Modais de confirmação de inativação com alerta EX-01 e testes unitários de componentes).
+- **2026-11-13 (Coder Agent — Checkpoint Passos 4 e 5 para Validação Humana):**
+  - **Passo 4 (Componente de Geração de QR Code — Canvas HD / SVG Vetorial / Impressão):**
+    - Instalada a biblioteca `qrcode` (`^1.5.4`) e `@types/qrcode` (`^1.5.6`) no pacote `web/`, configurando `allowedCommonJsDependencies` em `web/angular.json`.
+    - Criado `QrCodeModalComponent` (`web/src/app/pages/equipment/components/qr-code-modal.component.ts`) com alternância entre renderização **Canvas HD** (`QRCode.toCanvas`, correção de erro nível `H`) e **SVG Vetorial** (`QRCode.toString`), além de prévia completa da etiqueta patrimonial (Equipamento, Código, Cliente, Local, Patrimônio, Nº de Série e chip do QR Code).
+    - Implementadas ações de **Copiar Código**, **Baixar SVG** (vetorial), **Baixar PNG HD** (etiqueta composta em alta resolução `1080x1320` com QR Code `1024px`) e **Imprimir Etiqueta** (layout limpo de impressão com SVG vetorial).
+    - Integrado em `EquipmentListComponent` pelo clique direto no chip do QR Code da listagem, pelo botão **QR Code** na linha da tabela e pelo botão **Visualizar QR** ao lado de **Sugerir QR Único** no formulário de cadastro/edição.
+  - **Passo 5 (Modais de Confirmação para Ações Críticas de Inativação):**
+    - Criado `ConfirmModalComponent` (`web/src/app/shared/components/confirm-modal/confirm-modal.component.ts`) reutilizável com `role="alertdialog"`, aviso de impacto operacional (`RN-013`, `RN-088`), banner de alerta de vínculos ativos (`EX-01`) e suporte a confirmação adicional explícita via checkbox (`requireExtraConfirmation`).
+    - Adicionados estilos compartilhados de modal e botões de ação crítica (`.btn-danger`, `.btn-danger-outline`, `.modal-backdrop`, `.modal-card`) em `web/src/app/shared/styles/master-crud.scss`.
+    - Integrado nas 4 telas administrativas (`ClientsListComponent`, `SitesListComponent`, `EquipmentListComponent` e `UsersListComponent`), cobrindo tanto os botões **Inativar**/**Reativar** na tabela quanto a mudança de situação para `INACTIVE`/`DECOMMISSIONED`/`BLOCKED` dentro dos formulários de edição (`CA-04`):
+      - **Clientes (`EX-01`):** consulta locais ativos vinculados via `SitesApiService.listByClient` e exige marcação do checkbox de confirmação adicional antes de inativar.
+      - **Locais:** consulta equipamentos ativos vinculados via `EquipmentApiService.list` exibindo alerta específico quando há equipamentos ativos associados.
+      - **Equipamentos:** confirma inativação ou descomissionamento alertando sobre bloqueio em novas inspeções (`RN-012`).
+      - **Usuários:** confirma inativação ou bloqueio alertando sobre revogação imediata de sessões (`RN-008`).
+  - **Validações executadas neste checkpoint:**
+    - Frontend `npm --prefix web run typecheck`: aprovado.
+    - Frontend `npm --prefix web run build`: aprovado (bundle inicial `392.69 kB`, sem warnings CommonJS).
+    - Frontend `npm --prefix web run test:ci`: **41/41 testes aprovados** (incluindo `qr-code-modal.component.spec.ts` e `confirm-modal.component.spec.ts`).
+  - **Roteiro para Validação Humana (Passos 4 e 5):**
+    1. Acessar **Equipamentos** (`/app/equipment`), clicar no chip do QR Code ou no botão **QR Code** de um item (ou preencher um QR Code no formulário e clicar em **Visualizar QR**), alternar entre **Canvas HD** e **SVG Vetorial** e testar **Copiar Código**, **Baixar SVG**, **Baixar PNG HD** e **Imprimir Etiqueta**.
+    2. Em **Clientes**, **Locais**, **Equipamentos** e **Usuários**, testar o fluxo de **Inativar** (na linha da tabela e alterando a situação no formulário de edição), verificando o bloqueio da confirmação adicional em Clientes (`EX-01`) e a ação **Reativar**.
+    3. Após sua aprovação destes fluxos visuais, seguiremos para o **Passo 6** (testes unitários completos das telas de listagem e formulários) e encerramento da `TASK-008`.

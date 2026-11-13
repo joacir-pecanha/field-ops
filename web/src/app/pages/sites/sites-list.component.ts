@@ -3,17 +3,20 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ClientsApiService } from '../../core/master/clients-api.service';
+import { EquipmentApiService } from '../../core/master/equipment-api.service';
 import { uniqueSiteCodeValidator } from '../../core/master/master-async.validators';
 import {
   ClientResponse,
   MasterDataApiError,
   MasterStatus,
   PageResponse,
+  SiteRequest,
   SiteResponse,
   normalizeOptionalText,
 } from '../../core/master/master-data.models';
 import { SitesApiService } from '../../core/master/sites-api.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { ConfirmModalComponent } from '../../shared/components/confirm-modal/confirm-modal.component';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import {
   applyServerFieldErrors,
@@ -26,7 +29,14 @@ import {
 @Component({
   selector: 'app-sites-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, PaginationComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    RouterLink,
+    PaginationComponent,
+    ConfirmModalComponent,
+  ],
   templateUrl: './sites-list.component.html',
 })
 export class SitesListComponent implements OnInit {
@@ -34,15 +44,20 @@ export class SitesListComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly sitesApi = inject(SitesApiService);
   private readonly clientsApi = inject(ClientsApiService);
+  private readonly equipmentApi = inject(EquipmentApiService);
   private readonly notifications = inject(NotificationService);
 
   readonly loading = signal(false);
   readonly saving = signal(false);
+  readonly deactivating = signal(false);
   readonly loadError = signal<string | null>(null);
   readonly formError = signal<string | null>(null);
   readonly formOpen = signal(false);
   readonly submitted = signal(false);
   readonly editingSite = signal<SiteResponse | null>(null);
+  readonly confirmTarget = signal<SiteResponse | null>(null);
+  readonly pendingFormPayload = signal<SiteRequest | null>(null);
+  readonly confirmAlertBanner = signal<string | null>(null);
 
   readonly allClients = signal<ClientResponse[]>([]);
   readonly activeClients = signal<ClientResponse[]>([]);
@@ -275,7 +290,7 @@ export class SitesListComponent implements OnInit {
     const raw = this.form.getRawValue();
     const editing = this.editingSite();
     const stateNormalized = normalizeOptionalText(raw.state);
-    const payload = {
+    const payload: SiteRequest = {
       clientId: raw.clientId,
       code: normalizeOptionalText(raw.code),
       name: raw.name.trim(),
@@ -291,6 +306,106 @@ export class SitesListComponent implements OnInit {
       status: raw.status,
     };
 
+    if (editing && editing.active && payload.status === 'INACTIVE') {
+      this.openDeactivateConfirm(editing, payload);
+      return;
+    }
+
+    this.executeSave(editing, payload);
+  }
+
+  requestDeactivate(site: SiteResponse): void {
+    this.openDeactivateConfirm(site, null);
+  }
+
+  reactivateSite(site: SiteResponse): void {
+    if (this.deactivating()) {
+      return;
+    }
+    this.deactivating.set(true);
+    this.sitesApi.activate(site.id).subscribe({
+      next: (saved) => {
+        this.deactivating.set(false);
+        this.notifications.showSuccess(`Local "${saved.name}" reativado com sucesso.`);
+        this.loadSites();
+      },
+      error: (err: unknown) => {
+        this.deactivating.set(false);
+        const message =
+          err instanceof MasterDataApiError
+            ? err.message
+            : 'Não foi possível reativar o local.';
+        this.notifications.showError(message);
+      },
+    });
+  }
+
+  cancelDeactivate(): void {
+    if (this.deactivating() || this.saving()) {
+      return;
+    }
+    this.confirmTarget.set(null);
+    this.pendingFormPayload.set(null);
+    this.confirmAlertBanner.set(null);
+  }
+
+  confirmDeactivate(): void {
+    const target = this.confirmTarget();
+    const formPayload = this.pendingFormPayload();
+    if (!target || this.deactivating() || this.saving()) {
+      return;
+    }
+
+    if (formPayload) {
+      this.confirmTarget.set(null);
+      this.pendingFormPayload.set(null);
+      this.confirmAlertBanner.set(null);
+      this.executeSave(target, formPayload);
+      return;
+    }
+
+    this.deactivating.set(true);
+    this.sitesApi.deactivate(target.id).subscribe({
+      next: (saved) => {
+        this.deactivating.set(false);
+        this.confirmTarget.set(null);
+        this.confirmAlertBanner.set(null);
+        this.notifications.showSuccess(`Local "${saved.name}" inativado com sucesso.`);
+        this.loadSites();
+      },
+      error: (err: unknown) => {
+        this.deactivating.set(false);
+        const message =
+          err instanceof MasterDataApiError
+            ? err.message
+            : 'Não foi possível inativar o local.';
+        this.notifications.showError(message);
+      },
+    });
+  }
+
+  private openDeactivateConfirm(site: SiteResponse, formPayload: SiteRequest | null): void {
+    this.confirmTarget.set(site);
+    this.pendingFormPayload.set(formPayload);
+    this.confirmAlertBanner.set(null);
+
+    this.equipmentApi
+      .list({ siteId: site.id, active: true, page: 0, size: 1 })
+      .subscribe({
+        next: (res) => {
+          if (this.confirmTarget()?.id !== site.id) {
+            return;
+          }
+          if (res.totalElements > 0) {
+            this.confirmAlertBanner.set(
+              `Este local possui ${res.totalElements} equipamento(s) ativo(s) vinculado(s). Após a inativação, nem o local nem seus equipamentos poderão receber novas inspeções.`
+            );
+          }
+        },
+      });
+  }
+
+  private executeSave(editing: SiteResponse | null, payload: SiteRequest): void {
     this.saving.set(true);
     const request$ = editing
       ? this.sitesApi.update(editing.id, payload)

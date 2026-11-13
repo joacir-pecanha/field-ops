@@ -369,6 +369,27 @@
                     <button type="button" class="btn btn-secondary btn-sm" (click)="openEditForm(site)">
                       Editar
                     </button>
+                    @if (site.active) {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(site)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-site-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateSite(site)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-site-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
                   </div>
                 </td>
               </tr>
@@ -390,5 +411,17 @@
       />
     }
   </article>
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    title="Confirmar inativação de local"
+    [entityLabel]="confirmTarget() ? confirmTarget()!.name + ' (' + confirmTarget()!.clientName + ')' : ''"
+    message="Deseja realmente inativar este local? Locais inativos não podem receber novas inspeções (RN-013)."
+    [alertBannerText]="confirmAlertBanner()"
+    confirmLabel="Confirmar Inativação"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
 </section>
 

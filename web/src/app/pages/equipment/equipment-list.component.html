@@ -160,6 +160,15 @@
               >
                 Sugerir QR Único
               </button>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="openFormQrPreview()"
+                [disabled]="!form.controls.qrCode.value.trim() || form.controls.qrCode.invalid"
+                data-testid="preview-form-qr-btn"
+              >
+                Visualizar QR
+              </button>
             </div>
             @if (form.controls.qrCode.pending) {
               <span class="field-checking">Verificando unicidade do QR Code na API...</span>
@@ -412,7 +421,14 @@
                   <div class="cell-secondary">{{ item.clientName }}</div>
                 </td>
                 <td>
-                  <span class="code-chip">{{ item.qrCode }}</span>
+                  <button
+                    type="button"
+                    class="code-chip code-chip-clickable"
+                    (click)="openQrModal(item)"
+                    title="Abrir QR Code em alta definição para download ou impressão"
+                  >
+                    {{ item.qrCode }}
+                  </button>
                 </td>
                 <td>
                   <div>{{ item.assetNumber || '—' }}</div>
@@ -435,10 +451,39 @@
                     <button
                       type="button"
                       class="btn btn-secondary btn-sm"
+                      (click)="openQrModal(item)"
+                      data-testid="open-qr-modal-btn"
+                    >
+                      QR Code
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
                       (click)="openEditForm(item)"
                     >
                       Editar
                     </button>
+                    @if (item.status === 'ACTIVE') {
+                      <button
+                        type="button"
+                        class="btn btn-danger-outline btn-sm"
+                        (click)="requestDeactivate(item)"
+                        [disabled]="deactivating()"
+                        data-testid="deactivate-equipment-btn"
+                      >
+                        Inativar
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="reactivateEquipment(item)"
+                        [disabled]="deactivating()"
+                        data-testid="activate-equipment-btn"
+                      >
+                        Reativar
+                      </button>
+                    }
                   </div>
                 </td>
               </tr>
@@ -460,5 +505,21 @@
       />
     }
   </article>
+
+  <app-qr-code-modal
+    [equipment]="qrModalEquipment()"
+    (closed)="closeQrModal()"
+  />
+
+  <app-confirm-modal
+    [open]="confirmTarget() !== null"
+    [title]="pendingFormPayload()?.status === 'DECOMMISSIONED' ? 'Confirmar descomissionamento de equipamento' : 'Confirmar inativação de equipamento'"
+    [entityLabel]="confirmTarget() ? confirmTarget()!.name + ' (' + confirmTarget()!.qrCode + ')' : ''"
+    message="Deseja realmente alterar a situação deste equipamento? Equipamentos inativos ou descomissionados ficam impedidos de receber novas inspeções (RN-012, RN-013)."
+    [confirmLabel]="pendingFormPayload()?.status === 'DECOMMISSIONED' ? 'Confirmar Descomissionamento' : 'Confirmar Inativação'"
+    [loading]="deactivating() || saving()"
+    (confirmed)="confirmDeactivate()"
+    (cancelled)="cancelDeactivate()"
+  />
 </section>
 

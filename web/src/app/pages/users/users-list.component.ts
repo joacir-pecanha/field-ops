@@ -7,10 +7,12 @@ import {
   MasterDataApiError,
   PageResponse,
   UserResponse,
+  UserUpdateRequest,
   normalizeOptionalText,
 } from '../../core/master/master-data.models';
 import { UsersApiService } from '../../core/master/users-api.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { ConfirmModalComponent } from '../../shared/components/confirm-modal/confirm-modal.component';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import {
   applyServerFieldErrors,
@@ -23,7 +25,7 @@ import {
 @Component({
   selector: 'app-users-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, PaginationComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, PaginationComponent, ConfirmModalComponent],
   templateUrl: './users-list.component.html',
 })
 export class UsersListComponent implements OnInit {
@@ -33,11 +35,14 @@ export class UsersListComponent implements OnInit {
 
   readonly loading = signal(false);
   readonly saving = signal(false);
+  readonly deactivating = signal(false);
   readonly loadError = signal<string | null>(null);
   readonly formError = signal<string | null>(null);
   readonly formOpen = signal(false);
   readonly submitted = signal(false);
   readonly editingUser = signal<UserResponse | null>(null);
+  readonly confirmTarget = signal<UserResponse | null>(null);
+  readonly pendingFormUpdate = signal<UserUpdateRequest | null>(null);
 
   readonly pageData = signal<PageResponse<UserResponse>>({
     content: [],
@@ -217,36 +222,144 @@ export class UsersListComponent implements OnInit {
 
     const raw = this.form.getRawValue();
     const editing = this.editingUser();
+    if (editing && editing.status === 'ACTIVE' && raw.status !== 'ACTIVE') {
+      this.confirmTarget.set(editing);
+      this.pendingFormUpdate.set({
+        name: raw.name.trim(),
+        email: raw.email.trim(),
+        password: normalizeOptionalText(raw.password),
+        role: raw.role,
+        status: raw.status,
+        phone: normalizeOptionalText(raw.phone),
+      });
+      return;
+    }
+
+    this.executeSave(editing, raw);
+  }
+
+  requestDeactivate(user: UserResponse): void {
+    this.confirmTarget.set(user);
+    this.pendingFormUpdate.set(null);
+  }
+
+  reactivateUser(user: UserResponse): void {
+    if (this.deactivating()) {
+      return;
+    }
+    this.deactivating.set(true);
+    this.usersApi.activate(user.id).subscribe({
+      next: (saved) => {
+        this.deactivating.set(false);
+        this.notifications.showSuccess(`Usuário "${saved.name}" reativado com sucesso.`);
+        this.loadUsers();
+      },
+      error: (err: unknown) => {
+        this.deactivating.set(false);
+        const message =
+          err instanceof MasterDataApiError
+            ? err.message
+            : 'Não foi possível reativar o usuário.';
+        this.notifications.showError(message);
+      },
+    });
+  }
+
+  cancelDeactivate(): void {
+    if (this.deactivating() || this.saving()) {
+      return;
+    }
+    this.confirmTarget.set(null);
+    this.pendingFormUpdate.set(null);
+  }
+
+  confirmDeactivate(): void {
+    const target = this.confirmTarget();
+    const formUpdate = this.pendingFormUpdate();
+    if (!target || this.deactivating() || this.saving()) {
+      return;
+    }
+
+    if (formUpdate) {
+      this.confirmTarget.set(null);
+      this.pendingFormUpdate.set(null);
+      this.executeUpdate(target, formUpdate);
+      return;
+    }
+
+    this.deactivating.set(true);
+    this.usersApi.deactivate(target.id).subscribe({
+      next: (saved) => {
+        this.deactivating.set(false);
+        this.confirmTarget.set(null);
+        this.notifications.showSuccess(`Usuário "${saved.name}" inativado com sucesso.`);
+        this.loadUsers();
+      },
+      error: (err: unknown) => {
+        this.deactivating.set(false);
+        const message =
+          err instanceof MasterDataApiError
+            ? err.message
+            : 'Não foi possível inativar o usuário.';
+        this.notifications.showError(message);
+      },
+    });
+  }
+
+  private executeSave(
+    editing: UserResponse | null,
+    raw: ReturnType<typeof this.form.getRawValue>
+  ): void {
+    if (editing) {
+      this.executeUpdate(editing, {
+        name: raw.name.trim(),
+        email: raw.email.trim(),
+        password: normalizeOptionalText(raw.password),
+        role: raw.role,
+        status: raw.status,
+        phone: normalizeOptionalText(raw.phone),
+      });
+      return;
+    }
+
     this.saving.set(true);
+    this.usersApi
+      .create({
+        name: raw.name.trim(),
+        email: raw.email.trim(),
+        password: raw.password,
+        role: raw.role,
+        status: raw.status,
+        phone: normalizeOptionalText(raw.phone),
+      })
+      .subscribe({
+        next: (saved) => {
+          this.saving.set(false);
+          this.formOpen.set(false);
+          this.editingUser.set(null);
+          this.notifications.showSuccess(`Usuário "${saved.name}" cadastrado com sucesso.`);
+          this.loadUsers();
+        },
+        error: (err: unknown) => {
+          this.saving.set(false);
+          if (err instanceof MasterDataApiError) {
+            this.formError.set(err.message);
+            applyServerFieldErrors(this.form, err, { DUPLICATE_EMAIL: 'email' });
+            return;
+          }
+          this.formError.set('Não foi possível salvar o usuário.');
+        },
+      });
+  }
 
-    const request$ = editing
-      ? this.usersApi.update(editing.id, {
-          name: raw.name.trim(),
-          email: raw.email.trim(),
-          password: normalizeOptionalText(raw.password),
-          role: raw.role,
-          status: raw.status,
-          phone: normalizeOptionalText(raw.phone),
-        })
-      : this.usersApi.create({
-          name: raw.name.trim(),
-          email: raw.email.trim(),
-          password: raw.password,
-          role: raw.role,
-          status: raw.status,
-          phone: normalizeOptionalText(raw.phone),
-        });
-
-    request$.subscribe({
+  private executeUpdate(editing: UserResponse, payload: UserUpdateRequest): void {
+    this.saving.set(true);
+    this.usersApi.update(editing.id, payload).subscribe({
       next: (saved) => {
         this.saving.set(false);
         this.formOpen.set(false);
         this.editingUser.set(null);
-        this.notifications.showSuccess(
-          editing
-            ? `Usuário "${saved.name}" atualizado com sucesso.`
-            : `Usuário "${saved.name}" cadastrado com sucesso.`
-        );
+        this.notifications.showSuccess(`Usuário "${saved.name}" atualizado com sucesso.`);
         this.loadUsers();
       },
       error: (err: unknown) => {
