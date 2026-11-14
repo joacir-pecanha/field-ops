@@ -405,11 +405,7 @@ export class InspectionScheduleComponent implements OnInit {
           this.clients.set(clients.filter((c) => c.active));
           this.templates.set(
             templates.content.filter(
-              (tpl) =>
-                tpl.active &&
-                (tpl.status === 'PUBLISHED' ||
-                  Boolean(tpl.activeVersionId) ||
-                  tpl.currentVersion > 0)
+              (tpl) => tpl.active && (tpl.status === 'PUBLISHED' || tpl.currentVersion > 0)
             )
           );
           this.technicians.set(
