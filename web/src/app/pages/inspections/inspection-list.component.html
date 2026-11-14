@@ -1,0 +1,588 @@
+<section class="master-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Inspeções & Agendamentos</h1>
+      <p>
+        Acompanhe o status operacional em campo, filtre por cliente, técnico, período ou atraso e
+        agende novas inspeções com snapshot imutável.
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <a
+        routerLink="/app/inspections/new"
+        class="btn btn-primary"
+        data-testid="new-inspection-btn"
+      >
+        + Agendar Inspeção
+      </a>
+    </div>
+  </header>
+
+  <section class="filters-card">
+    <form class="filters-grid-inspections" (ngSubmit)="applyFilters()">
+      <div class="filter-field">
+        <label for="inspections-search">Buscar (título, código, local)</label>
+        <input
+          id="inspections-search"
+          name="search"
+          type="text"
+          [ngModel]="searchFilter"
+          (ngModelChange)="onSearchInput($event)"
+          placeholder="Título, código do equipamento, cliente..."
+          data-testid="inspections-search-input"
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="inspections-status">Estado</label>
+        <select
+          id="inspections-status"
+          name="status"
+          [(ngModel)]="statusFilter"
+          (change)="applyFilters()"
+          data-testid="inspections-status-filter"
+        >
+          <option value="">Todos os estados</option>
+          @for (opt of statusOptions; track opt.value) {
+            <option [value]="opt.value">{{ opt.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="inspections-priority">Prioridade</label>
+        <select
+          id="inspections-priority"
+          name="priority"
+          [(ngModel)]="priorityFilter"
+          (change)="applyFilters()"
+          data-testid="inspections-priority-filter"
+        >
+          <option value="">Todas as prioridades</option>
+          @for (prio of priorityOptions; track prio.value) {
+            <option [value]="prio.value">{{ prio.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="inspections-client">Cliente</label>
+        <select
+          id="inspections-client"
+          name="clientId"
+          [(ngModel)]="clientFilter"
+          (change)="applyFilters()"
+          data-testid="inspections-client-filter"
+        >
+          <option value="">Todos os clientes</option>
+          @for (client of clients(); track client.id) {
+            <option [value]="client.id">{{ client.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="inspections-technician">Técnico</label>
+        <select
+          id="inspections-technician"
+          name="technicianId"
+          [(ngModel)]="technicianFilter"
+          (change)="applyFilters()"
+          data-testid="inspections-technician-filter"
+        >
+          <option value="">Todos os técnicos</option>
+          @for (tech of technicians(); track tech.id) {
+            <option [value]="tech.id">{{ tech.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="inspections-from">Data prevista (de)</label>
+        <input
+          id="inspections-from"
+          name="scheduledFrom"
+          type="date"
+          [(ngModel)]="scheduledFromFilter"
+          (change)="applyFilters()"
+          data-testid="inspections-from-filter"
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="inspections-to">Data prevista (até)</label>
+        <input
+          id="inspections-to"
+          name="scheduledTo"
+          type="date"
+          [(ngModel)]="scheduledToFilter"
+          (change)="applyFilters()"
+          data-testid="inspections-to-filter"
+        />
+      </div>
+
+      <div class="filter-field">
+        <label for="inspections-overdue">Situação de prazo</label>
+        <label class="filter-checkbox" for="inspections-overdue">
+          <input
+            id="inspections-overdue"
+            name="overdueOnly"
+            type="checkbox"
+            [(ngModel)]="overdueOnly"
+            (change)="applyFilters()"
+            data-testid="inspections-overdue-filter"
+          />
+          <span>Somente em atraso</span>
+        </label>
+      </div>
+
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-primary" data-testid="inspections-filter-submit">
+          Filtrar
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          (click)="clearFilters()"
+          data-testid="inspections-filter-clear"
+        >
+          Limpar
+        </button>
+      </div>
+    </form>
+  </section>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar inspeções</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadInspections()">
+        Tentar novamente
+      </button>
+    </div>
+  }
+
+  <article class="table-card">
+    @if (loading()) {
+      <div class="skeleton-list" aria-label="Carregando inspeções">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    } @else if (pageData().content.length === 0) {
+      <div class="empty-state" data-testid="inspections-empty-state">
+        <h3>Nenhuma inspeção encontrada</h3>
+        <p>
+          Ajuste os filtros de estado, técnico, cliente, período ou prioridade, ou agende uma nova
+          inspeção para a equipe de campo.
+        </p>
+        <a routerLink="/app/inspections/new" class="btn btn-primary">
+          + Agendar Primeira Inspeção
+        </a>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('title')">
+                  <span>Inspeção / Modelo</span>
+                  <span class="sort-indicator">{{ sortIcon('title') }}</span>
+                </button>
+              </th>
+              <th>Cliente / Local / Equipamento</th>
+              <th>Técnico</th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('priority')">
+                  <span>Prioridade</span>
+                  <span class="sort-indicator">{{ sortIcon('priority') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-btn"
+                  (click)="onSort('scheduledFor')"
+                  data-testid="sort-scheduled-for-btn"
+                >
+                  <span>Data Prevista</span>
+                  <span class="sort-indicator">{{ sortIcon('scheduledFor') }}</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" (click)="onSort('status')">
+                  <span>Estado</span>
+                  <span class="sort-indicator">{{ sortIcon('status') }}</span>
+                </button>
+              </th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (inspection of pageData().content; track inspection.id) {
+              <tr
+                [class.row-overdue]="inspection.overdue"
+                [attr.data-overdue]="inspection.overdue"
+                data-testid="inspection-row"
+              >
+                <td>
+                  <div class="cell-primary">{{ inspection.title }}</div>
+                  <div class="cell-secondary">
+                    @if (inspection.templateCode) {
+                      <span class="code-chip">{{ inspection.templateCode }}</span>
+                    }
+                    <span>
+                      v{{ inspection.templateVersionNumber ?? inspection.templateVersion ?? 1 }} •
+                      {{ inspection.totalItems }}
+                      {{ inspection.totalItems === 1 ? 'item' : 'itens' }}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div class="cell-primary">{{ inspection.clientName || '—' }}</div>
+                  <div class="cell-secondary">{{ inspection.siteName || '—' }}</div>
+                  @if (inspection.equipmentName) {
+                    <div class="cell-secondary">
+                      {{ inspection.equipmentName }}
+                      @if (inspection.equipmentCode) {
+                        ({{ inspection.equipmentCode }})
+                      }
+                    </div>
+                  }
+                </td>
+                <td>
+                  <div class="cell-primary">{{ inspection.technicianName || '—' }}</div>
+                  @if (inspection.technicianEmail) {
+                    <div class="cell-secondary">{{ inspection.technicianEmail }}</div>
+                  }
+                </td>
+                <td>
+                  <span
+                    class="priority-badge"
+                    [class.prio-low]="inspection.priority === 'BAIXA'"
+                    [class.prio-medium]="inspection.priority === 'MEDIA'"
+                    [class.prio-high]="inspection.priority === 'ALTA'"
+                    [class.prio-urgent]="
+                      inspection.priority === 'URGENTE' || inspection.priority === 'CRITICA'
+                    "
+                  >
+                    {{ priorityLabel(inspection.priority) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="cell-primary">
+                    {{ inspection.scheduledFor | date: 'dd/MM/yyyy HH:mm' }}
+                  </div>
+                  @if (inspection.overdue) {
+                    <span class="overdue-badge" data-testid="overdue-badge">
+                      ⚠ Em atraso
+                    </span>
+                  }
+                </td>
+                <td>
+                  <span
+                    class="status-pill"
+                    [class.tone-blue]="statusTone(inspection.status) === 'blue'"
+                    [class.tone-orange]="statusTone(inspection.status) === 'orange'"
+                    [class.tone-yellow]="statusTone(inspection.status) === 'yellow'"
+                    [class.tone-green]="statusTone(inspection.status) === 'green'"
+                    [class.tone-red]="statusTone(inspection.status) === 'red'"
+                    [class.tone-gray]="statusTone(inspection.status) === 'gray'"
+                    data-testid="inspection-status-badge"
+                  >
+                    {{ statusLabel(inspection.status) }}
+                  </span>
+                  @if (inspection.status === 'CANCELADA' && inspection.canceledReason) {
+                    <div class="cell-secondary">Motivo: {{ inspection.canceledReason }}</div>
+                  }
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      (click)="openDetailsModal(inspection)"
+                      data-testid="inspection-details-btn"
+                    >
+                      Detalhes
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-danger-outline btn-sm"
+                      [disabled]="!canCancel(inspection)"
+                      [title]="cancelButtonTitle(inspection)"
+                      (click)="openCancelModal(inspection)"
+                      data-testid="inspection-cancel-btn"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination
+        [page]="pageData().page"
+        [size]="pageData().size"
+        [totalElements]="pageData().totalElements"
+        [totalPages]="pageData().totalPages"
+        [first]="pageData().first"
+        [last]="pageData().last"
+        [disabled]="loading()"
+        (pageChange)="onPageChange($event)"
+        (sizeChange)="onSizeChange($event)"
+      />
+    }
+  </article>
+
+  <!-- Modal obrigatório de Cancelamento com Justificativa (RF-07 / EX-02) -->
+  @if (cancelTarget(); as target) {
+    <div class="modal-backdrop" role="presentation" (click)="closeCancelModal()">
+      <section
+        class="modal-card modal-card-compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cancel-inspection-modal-title"
+        (click)="$event.stopPropagation()"
+        data-testid="cancel-inspection-modal"
+      >
+        <header class="modal-header">
+          <h2 id="cancel-inspection-modal-title">Cancelar Inspeção</h2>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            (click)="closeCancelModal()"
+            [disabled]="cancelSaving()"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div class="modal-body">
+          <div class="target-pill">
+            <strong>{{ target.title }}</strong>
+            <div class="cell-secondary">
+              {{ target.clientName }} • {{ target.siteName }} • Técnico:
+              {{ target.technicianName }}
+            </div>
+          </div>
+
+          @if (cancelError()) {
+            <div class="alert-banner alert-error" role="alert">
+              <div>
+                <strong>Não foi possível cancelar</strong>
+                <p>{{ cancelError() }}</p>
+              </div>
+            </div>
+          }
+
+          <div class="form-field">
+            <label for="cancel-reason-input">Justificativa do cancelamento *</label>
+            <textarea
+              id="cancel-reason-input"
+              name="cancelReason"
+              rows="3"
+              maxlength="1000"
+              [(ngModel)]="cancelReason"
+              placeholder="Descreva o motivo operacional do cancelamento (obrigatório)..."
+              data-testid="cancel-reason-input"
+            ></textarea>
+            <span class="field-hint">
+              A justificativa, o responsável e o horário serão registrados na trilha de auditoria
+              (RN-029).
+            </span>
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            (click)="closeCancelModal()"
+            [disabled]="cancelSaving()"
+          >
+            Voltar
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            (click)="confirmCancel()"
+            [disabled]="cancelSaving() || !cancelReason.trim()"
+            data-testid="confirm-cancel-inspection-btn"
+          >
+            @if (cancelSaving()) {
+              <span class="inline-spinner"></span>
+              <span>Cancelando...</span>
+            } @else {
+              <span>Confirmar Cancelamento</span>
+            }
+          </button>
+        </footer>
+      </section>
+    </div>
+  }
+
+  <!-- Modal de Detalhes, Snapshot de Itens e Auditoria -->
+  @if (detailsTarget(); as detail) {
+    <div class="modal-backdrop" role="presentation" (click)="closeDetailsModal()">
+      <section
+        class="modal-card modal-card-wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="inspection-details-modal-title"
+        (click)="$event.stopPropagation()"
+        data-testid="inspection-details-modal"
+      >
+        <header class="modal-header">
+          <div>
+            <h2 id="inspection-details-modal-title">{{ detail.title }}</h2>
+            <div class="cell-secondary">
+              {{ detail.templateTitle }} (v{{ detail.templateVersionNumber ?? detail.templateVersion }})
+            </div>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" (click)="closeDetailsModal()">
+            ✕
+          </button>
+        </header>
+
+        <div class="modal-body">
+          <div class="summary-strip">
+            <span
+              class="status-pill"
+              [class.tone-blue]="statusTone(detail.status) === 'blue'"
+              [class.tone-orange]="statusTone(detail.status) === 'orange'"
+              [class.tone-yellow]="statusTone(detail.status) === 'yellow'"
+              [class.tone-green]="statusTone(detail.status) === 'green'"
+              [class.tone-red]="statusTone(detail.status) === 'red'"
+              [class.tone-gray]="statusTone(detail.status) === 'gray'"
+            >
+              {{ statusLabel(detail.status) }}
+            </span>
+
+            @if (detail.overdue) {
+              <span class="overdue-badge">⚠ Em atraso</span>
+            }
+
+            <span>
+              Prevista para:
+              <strong>{{ detail.scheduledFor | date: 'dd/MM/yyyy HH:mm' }}</strong>
+            </span>
+          </div>
+
+          <div class="details-grid">
+            <div class="details-item">
+              <span>Cliente</span>
+              <strong>{{ detail.clientName || '—' }}</strong>
+            </div>
+            <div class="details-item">
+              <span>Local</span>
+              <strong>{{ detail.siteName || '—' }}</strong>
+            </div>
+            <div class="details-item">
+              <span>Equipamento / QR</span>
+              <strong>
+                @if (detail.equipmentName) {
+                  {{ detail.equipmentName }}
+                  {{ detail.equipmentQrCode ? '(' + detail.equipmentQrCode + ')' : '' }}
+                } @else {
+                  Inspeção geral do local
+                }
+              </strong>
+            </div>
+            <div class="details-item">
+              <span>Técnico</span>
+              <strong>{{ detail.technicianName || '—' }}</strong>
+            </div>
+            <div class="details-item">
+              <span>Supervisor</span>
+              <strong>{{ detail.supervisorName || '—' }}</strong>
+            </div>
+            <div class="details-item">
+              <span>Prioridade</span>
+              <strong>{{ priorityLabel(detail.priority) }}</strong>
+            </div>
+          </div>
+
+          @if (detail.instructions) {
+            <div class="target-pill">
+              <strong>Instruções ao técnico:</strong>
+              <div>{{ detail.instructions }}</div>
+            </div>
+          }
+
+          @if (detail.status === 'CANCELADA' && detail.canceledReason) {
+            <div class="alert-banner alert-warning">
+              <div>
+                <strong>Inspeção Cancelada</strong>
+                <p>Justificativa: {{ detail.canceledReason }}</p>
+              </div>
+            </div>
+          }
+
+          @if (detailsLoading()) {
+            <div class="skeleton-list">
+              <div class="skeleton-row"></div>
+              <div class="skeleton-row"></div>
+            </div>
+          } @else {
+            <div>
+              <h3 style="margin: 0 0 0.5rem; font-size: 0.94rem; color: #0f172a">
+                Snapshot Congelado do Checklist ({{ detail.items.length }} itens)
+              </h3>
+              <div class="snapshot-list">
+                @for (item of detail.items; track item.id) {
+                  <div class="snapshot-item">
+                    <div>
+                      <div class="cell-primary">
+                        {{ item.itemCode ? item.itemCode + ' — ' : '' }}{{ item.itemTitle }}
+                      </div>
+                      <div class="cell-secondary">
+                        Seção: {{ item.sectionTitle }} • Tipo:
+                        {{ responseTypeLabel(item.responseType) }}
+                        {{ item.required ? '• Obrigatório' : '' }}
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            @if (detailsAuditLogs().length > 0) {
+              <div>
+                <h3 style="margin: 0 0 0.5rem; font-size: 0.94rem; color: #0f172a">
+                  Trilha de Auditoria
+                </h3>
+                <div class="audit-list">
+                  @for (log of detailsAuditLogs(); track log.id) {
+                    <div class="audit-row">
+                      <strong>{{ log.action }}</strong> — {{ log.details }}
+                      <div class="cell-secondary">
+                        {{ log.occurredAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+                        {{ log.actorEmail ? '• Por: ' + log.actorEmail : '' }}
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+        </div>
+
+        <footer class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeDetailsModal()">
+            Fechar
+          </button>
+        </footer>
+      </section>
+    </div>
+  }
+</section>

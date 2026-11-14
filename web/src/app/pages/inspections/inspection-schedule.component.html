@@ -1,0 +1,535 @@
+<section class="master-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Agendar Nova Inspeção</h1>
+      <p>
+        Selecione cliente, local, equipamento, modelo publicado e técnico ativo para gerar o
+        agendamento e congelar o snapshot do checklist.
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <a
+        routerLink="/app/inspections"
+        class="btn btn-secondary"
+        data-testid="back-to-inspections-btn"
+      >
+        ← Voltar para Inspeções
+      </a>
+    </div>
+  </header>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert">
+      <div>
+        <strong>Erro ao carregar dados para agendamento</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadInitialOptions()">
+        Tentar novamente
+      </button>
+    </div>
+  }
+
+  @if (loadingInitial()) {
+    <article class="table-card">
+      <div class="skeleton-list" aria-label="Carregando opções de agendamento">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    </article>
+  } @else {
+    <div class="schedule-layout">
+      <form class="schedule-main" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        @if (formError()) {
+          <div class="alert-banner alert-error" role="alert" data-testid="schedule-form-error">
+            <div>
+              <strong>Não foi possível concluir o agendamento</strong>
+              <p>{{ formError() }}</p>
+            </div>
+          </div>
+        }
+
+        <!-- Bloco 1: Hierarquia Cliente -> Local -> Equipamento -->
+        <section class="section-card">
+          <div class="section-card-header">
+            <div>
+              <h2>1. Cliente, Local e Equipamento</h2>
+              <p>
+                Seleção hierárquica reativa (RF-01) ou vínculo rápido por QR Code / código do
+                equipamento.
+              </p>
+            </div>
+            <span class="step-pill">Localização</span>
+          </div>
+
+          <div class="qr-lookup-box">
+            <label for="qr-lookup-input">Atalho por Código ou QR Code do Equipamento</label>
+            <div class="qr-lookup-row">
+              <input
+                id="qr-lookup-input"
+                name="qrLookupTerm"
+                type="text"
+                [(ngModel)]="qrLookupTerm"
+                [ngModelOptions]="{ standalone: true }"
+                placeholder="Ex.: QR-FIELDOPS-GD001 ou EQP-GD-001"
+                (keyup.enter)="lookupEquipmentByCodeOrQr()"
+                data-testid="qr-lookup-input"
+              />
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="lookupEquipmentByCodeOrQr()"
+                [disabled]="lookingUpQr()"
+                data-testid="qr-lookup-btn"
+              >
+                {{ lookingUpQr() ? 'Buscando...' : 'Localizar Equipamento' }}
+              </button>
+            </div>
+            @if (qrLookupMessage()) {
+              <div class="qr-feedback qr-feedback-success" data-testid="qr-lookup-success">
+                {{ qrLookupMessage() }}
+              </div>
+            }
+            @if (qrLookupError()) {
+              <div class="qr-feedback qr-feedback-error" data-testid="qr-lookup-error">
+                {{ qrLookupError() }}
+              </div>
+            }
+          </div>
+
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="schedule-client">Cliente *</label>
+              <select
+                id="schedule-client"
+                formControlName="clientId"
+                [class.input-invalid]="invalid('clientId')"
+                (change)="onClientManualChange()"
+                data-testid="schedule-client-select"
+              >
+                <option value="">Selecione um cliente ativo...</option>
+                @for (client of clients(); track client.id) {
+                  <option [value]="client.id">
+                    {{ client.name }}{{ client.code ? ' (' + client.code + ')' : '' }}
+                  </option>
+                }
+              </select>
+              @if (invalid('clientId')) {
+                <span class="field-error">
+                  @if (form.controls.clientId.hasError('serverError')) {
+                    {{ form.controls.clientId.getError('serverError') }}
+                  } @else {
+                    Selecione o cliente da inspeção.
+                  }
+                </span>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-site">Local de Inspeção *</label>
+              <select
+                id="schedule-site"
+                formControlName="siteId"
+                [class.input-invalid]="invalid('siteId')"
+                (change)="onSiteManualChange()"
+                data-testid="schedule-site-select"
+              >
+                @if (!form.controls.clientId.value) {
+                  <option value="">Selecione primeiro o cliente...</option>
+                } @else if (loadingSites()) {
+                  <option value="">Carregando locais do cliente...</option>
+                } @else if (sites().length === 0) {
+                  <option value="">Nenhum local ativo encontrado para este cliente</option>
+                } @else {
+                  <option value="">Selecione o local...</option>
+                  @for (site of sites(); track site.id) {
+                    <option [value]="site.id">
+                      {{ site.name }}{{ site.city ? ' — ' + site.city + (site.state ? '/' + site.state : '') : '' }}
+                    </option>
+                  }
+                }
+              </select>
+              @if (loadingSites()) {
+                <span class="field-checking">Carregando locais vinculados...</span>
+              }
+              @if (invalid('siteId')) {
+                <span class="field-error">
+                  @if (form.controls.siteId.hasError('serverError')) {
+                    {{ form.controls.siteId.getError('serverError') }}
+                  } @else {
+                    Selecione um local pertencente ao cliente.
+                  }
+                </span>
+              }
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="schedule-equipment">Equipamento (opcional para inspeção de ambiente)</label>
+              <select
+                id="schedule-equipment"
+                formControlName="equipmentId"
+                [class.input-invalid]="invalid('equipmentId')"
+                (change)="onFieldInput('equipmentId')"
+                data-testid="schedule-equipment-select"
+              >
+                @if (!form.controls.siteId.value) {
+                  <option value="">Selecione primeiro o local...</option>
+                } @else if (loadingEquipments()) {
+                  <option value="">Carregando equipamentos do local...</option>
+                } @else if (equipments().length === 0) {
+                  <option value="">Sem equipamento vinculado (inspeção de ambiente/local)</option>
+                } @else {
+                  <option value="">Sem equipamento específico (inspeção do local)</option>
+                  @for (eq of equipments(); track eq.id) {
+                    <option [value]="eq.id">
+                      {{ eq.name }}{{ eq.code ? ' [' + eq.code + ']' : '' }} — QR: {{ eq.qrCode }}
+                    </option>
+                  }
+                }
+              </select>
+              @if (loadingEquipments()) {
+                <span class="field-checking">Carregando equipamentos do local...</span>
+              } @else {
+                <span class="field-hint">
+                  Exibe apenas equipamentos ativos pertencentes ao local selecionado.
+                </span>
+              }
+              @if (invalid('equipmentId')) {
+                <span class="field-error">
+                  @if (form.controls.equipmentId.hasError('serverError')) {
+                    {{ form.controls.equipmentId.getError('serverError') }}
+                  }
+                </span>
+              }
+            </div>
+          </div>
+        </section>
+
+        <!-- Bloco 2: Modelo Publicado e Técnico -->
+        <section class="section-card">
+          <div class="section-card-header">
+            <div>
+              <h2>2. Modelo Publicado e Técnico Responsável</h2>
+              <p>
+                Apenas versões publicadas ativas (RF-02) e usuários ativos com perfil TECHNICIAN
+                (RF-03) são elegíveis.
+              </p>
+            </div>
+            <span class="step-pill">Checklist & Equipe</span>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="schedule-template">Modelo de Inspeção (Publicado) *</label>
+              <select
+                id="schedule-template"
+                formControlName="templateId"
+                [class.input-invalid]="invalid('templateId')"
+                (change)="onFieldInput('templateId')"
+                data-testid="schedule-template-select"
+              >
+                @if (templates().length === 0) {
+                  <option value="">Nenhum modelo publicado disponível</option>
+                } @else {
+                  <option value="">Selecione um modelo publicado...</option>
+                  @for (tpl of templates(); track tpl.id) {
+                    <option [value]="tpl.id">
+                      {{ tpl.title }}{{ tpl.code ? ' (' + tpl.code + ')' : '' }} — v{{
+                        tpl.currentVersion || tpl.version
+                      }}
+                    </option>
+                  }
+                }
+              </select>
+              @if (invalid('templateId')) {
+                <span class="field-error">
+                  @if (form.controls.templateId.hasError('serverError')) {
+                    {{ form.controls.templateId.getError('serverError') }}
+                  } @else {
+                    Selecione um modelo de inspeção publicado.
+                  }
+                </span>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-template-version">Versão Publicada *</label>
+              <select
+                id="schedule-template-version"
+                formControlName="templateVersionId"
+                [class.input-invalid]="invalid('templateVersionId')"
+                (change)="onFieldInput('templateVersionId')"
+                data-testid="schedule-version-select"
+              >
+                @if (!form.controls.templateId.value) {
+                  <option value="">Selecione primeiro o modelo...</option>
+                } @else if (loadingVersions()) {
+                  <option value="">Carregando versões publicadas...</option>
+                } @else if (publishedVersions().length === 0) {
+                  <option value="">Nenhuma versão publicada encontrada</option>
+                } @else {
+                  @for (ver of publishedVersions(); track ver.id) {
+                    <option [value]="ver.id">
+                      v{{ ver.versionNumber }} — {{ ver.totalItems }}
+                      {{ ver.totalItems === 1 ? 'item' : 'itens'
+                      }}{{ ver.activeForNewInspections ? ' (Publicada ativa)' : '' }}
+                    </option>
+                  }
+                }
+              </select>
+              @if (loadingVersions()) {
+                <span class="field-checking">Buscando versões publicadas...</span>
+              }
+              @if (invalid('templateVersionId')) {
+                <span class="field-error">
+                  @if (form.controls.templateVersionId.hasError('serverError')) {
+                    {{ form.controls.templateVersionId.getError('serverError') }}
+                  } @else {
+                    Selecione uma versão publicada válida.
+                  }
+                </span>
+              }
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="schedule-technician">Técnico Responsável (Ativo) *</label>
+              <select
+                id="schedule-technician"
+                formControlName="technicianId"
+                [class.input-invalid]="invalid('technicianId')"
+                (change)="onFieldInput('technicianId')"
+                data-testid="schedule-technician-select"
+              >
+                @if (technicians().length === 0) {
+                  <option value="">Nenhum técnico ativo disponível</option>
+                } @else {
+                  <option value="">Selecione o técnico responsável...</option>
+                  @for (tech of technicians(); track tech.id) {
+                    <option [value]="tech.id">{{ tech.name }} ({{ tech.email }})</option>
+                  }
+                }
+              </select>
+              @if (invalid('technicianId')) {
+                <span class="field-error">
+                  @if (form.controls.technicianId.hasError('serverError')) {
+                    {{ form.controls.technicianId.getError('serverError') }}
+                  } @else {
+                    Selecione um técnico ativo com perfil TECHNICIAN.
+                  }
+                </span>
+              }
+            </div>
+          </div>
+        </section>
+
+        <!-- Bloco 3: Data Prevista, Prioridade e Instruções -->
+        <section class="section-card">
+          <div class="section-card-header">
+            <div>
+              <h2>3. Prazo, Prioridade e Orientações</h2>
+              <p>Defina a data prevista, o nível de prioridade operacional e instruções de campo.</p>
+            </div>
+            <span class="step-pill">Planejamento</span>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="schedule-date">Data Prevista *</label>
+              <input
+                id="schedule-date"
+                type="date"
+                formControlName="scheduledDate"
+                [class.input-invalid]="invalid('scheduledDate')"
+                (input)="onFieldInput('scheduledDate')"
+                data-testid="schedule-date-input"
+              />
+              @if (invalid('scheduledDate')) {
+                <span class="field-error">
+                  @if (form.controls.scheduledDate.hasError('serverError')) {
+                    {{ form.controls.scheduledDate.getError('serverError') }}
+                  } @else {
+                    Informe a data prevista de realização.
+                  }
+                </span>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-time">Horário Previsto *</label>
+              <input
+                id="schedule-time"
+                type="time"
+                formControlName="scheduledTime"
+                [class.input-invalid]="invalid('scheduledTime')"
+                (input)="onFieldInput('scheduledTime')"
+                data-testid="schedule-time-input"
+              />
+              @if (invalid('scheduledTime')) {
+                <span class="field-error">Informe o horário previsto.</span>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-priority">Prioridade *</label>
+              <select
+                id="schedule-priority"
+                formControlName="priority"
+                [class.input-invalid]="invalid('priority')"
+                (change)="onFieldInput('priority')"
+                data-testid="schedule-priority-select"
+              >
+                @for (opt of priorityOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+              @if (invalid('priority')) {
+                <span class="field-error">Selecione a prioridade da inspeção.</span>
+              }
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="schedule-title">Título da Inspeção (opcional)</label>
+              <input
+                id="schedule-title"
+                type="text"
+                formControlName="title"
+                placeholder="Se omitido, será gerado automaticamente a partir do modelo e local/equipamento"
+                [class.input-invalid]="invalid('title')"
+                (input)="onFieldInput('title')"
+                data-testid="schedule-title-input"
+              />
+              @if (invalid('title')) {
+                <span class="field-error">O título deve ter no máximo 250 caracteres.</span>
+              }
+            </div>
+
+            <div class="form-field form-field-full">
+              <label for="schedule-instructions">Instruções para o Técnico</label>
+              <textarea
+                id="schedule-instructions"
+                rows="3"
+                formControlName="instructions"
+                placeholder="Orientações de acesso, EPIs obrigatórios, contato local ou observações operacionais..."
+                [class.input-invalid]="invalid('instructions')"
+                (input)="onFieldInput('instructions')"
+                data-testid="schedule-instructions-input"
+              ></textarea>
+              @if (invalid('instructions')) {
+                <span class="field-error">As instruções devem ter no máximo 2000 caracteres.</span>
+              }
+            </div>
+          </div>
+
+          <div class="submit-bar">
+            <a routerLink="/app/inspections" class="btn btn-secondary">Cancelar</a>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="form.invalid || saving() || loadingInitial()"
+              data-testid="schedule-submit-btn"
+            >
+              @if (saving()) {
+                <span class="inline-spinner"></span>
+                <span>Agendando e gerando snapshot...</span>
+              } @else {
+                <span>Agendar e Atribuir Inspeção</span>
+              }
+            </button>
+          </div>
+        </section>
+      </form>
+
+      <!-- Resumo lateral ao vivo -->
+      <aside class="summary-card" aria-label="Resumo do agendamento">
+        <h2>Resumo do Agendamento</h2>
+
+        <dl class="summary-list">
+          <div class="summary-item">
+            <dt>Título previsto</dt>
+            <dd>{{ resolvedPreviewTitle() }}</dd>
+          </div>
+
+          <div class="summary-item">
+            <dt>Cliente / Local</dt>
+            <dd>
+              {{ selectedClient()?.name || 'Não selecionado' }}
+              @if (selectedSite(); as site) {
+                <span class="summary-sub">{{ site.name }}</span>
+              }
+            </dd>
+          </div>
+
+          <div class="summary-item">
+            <dt>Equipamento</dt>
+            <dd>
+              @if (selectedEquipment(); as eq) {
+                {{ eq.name }}
+                <span class="summary-sub">
+                  {{ eq.code ? eq.code + ' • ' : '' }}QR: {{ eq.qrCode }}
+                </span>
+              } @else {
+                <span class="summary-sub">Inspeção geral de local / ambiente</span>
+              }
+            </dd>
+          </div>
+
+          <div class="summary-item">
+            <dt>Modelo e Versão</dt>
+            <dd>
+              @if (selectedTemplate(); as tpl) {
+                {{ tpl.title }}
+                <span class="summary-sub">
+                  {{ categoryLabel(tpl.category) }}
+                  @if (selectedTemplateVersion(); as ver) {
+                    • v{{ ver.versionNumber }} ({{ ver.totalItems }}
+                    {{ ver.totalItems === 1 ? 'item' : 'itens' }})
+                  }
+                </span>
+              } @else {
+                Não selecionado
+              }
+            </dd>
+          </div>
+
+          <div class="summary-item">
+            <dt>Técnico Responsável</dt>
+            <dd>
+              @if (selectedTechnician(); as tech) {
+                {{ tech.name }}
+                <span class="summary-sub">{{ tech.email }}</span>
+              } @else {
+                Não selecionado
+              }
+            </dd>
+          </div>
+
+          <div class="summary-item">
+            <dt>Agendamento & Prioridade</dt>
+            <dd>
+              {{ form.controls.scheduledDate.value || '—' }} às
+              {{ form.controls.scheduledTime.value || '—' }}
+              <span class="summary-sub">
+                Prioridade: {{ priorityLabel(form.controls.priority.value) }}
+              </span>
+            </dd>
+          </div>
+        </dl>
+
+        @if (missingRequiredSummary().length > 0) {
+          <div class="validation-callout" data-testid="schedule-missing-fields">
+            <strong>Campos obrigatórios pendentes:</strong>
+            {{ missingRequiredSummary().join(', ') }}.
+          </div>
+        } @else {
+          <div class="snapshot-note">
+            Ao confirmar, a inspeção será criada com status <strong>ATRIBUÍDA</strong> e todos os
+            itens da versão publicada selecionada serão congelados em snapshot imutável.
+          </div>
+        }
+      </aside>
+    </div>
+  }
+</section>
