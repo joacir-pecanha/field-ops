@@ -3,6 +3,7 @@ package com.fieldops.security.config;
 import com.fieldops.modules.auth.exception.InvalidCredentialsException;
 import com.fieldops.modules.auth.exception.InvalidRefreshTokenException;
 import com.fieldops.modules.auth.exception.UserInactiveException;
+import com.fieldops.modules.inspection.exception.InspectionSchedulingValidationException;
 import com.fieldops.modules.master.domain.UserStatus;
 import com.fieldops.modules.master.exception.BusinessRuleException;
 import com.fieldops.modules.master.exception.DuplicateResourceException;
@@ -171,6 +172,22 @@ public class GlobalExceptionHandler {
         );
         problem.setProperty("pendencies", ex.getPendencies());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(InspectionSchedulingValidationException.class)
+    public ResponseEntity<ProblemDetail> handleInspectionSchedulingValidation(
+            InspectionSchedulingValidationException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Agendamento rejeitado ({}) em {}", ex.getCode(), request.getRequestURI());
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "inspection-scheduling-validation",
+                "Dados inválidos para agendamento",
+                ex.getMessage(),
+                ex.getCode(),
+                request
+        );
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
