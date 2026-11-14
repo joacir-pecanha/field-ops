@@ -1,5 +1,12 @@
 package com.fieldops.config;
 
+import com.fieldops.modules.inspection.domain.Inspection;
+import com.fieldops.modules.inspection.domain.InspectionPriority;
+import com.fieldops.modules.inspection.domain.InspectionStatus;
+import com.fieldops.modules.inspection.dto.InspectionDetailsResponse;
+import com.fieldops.modules.inspection.dto.ScheduleInspectionRequest;
+import com.fieldops.modules.inspection.repository.InspectionRepository;
+import com.fieldops.modules.inspection.service.InspectionSchedulingService;
 import com.fieldops.modules.master.domain.Client;
 import com.fieldops.modules.master.domain.Equipment;
 import com.fieldops.modules.master.domain.EquipmentStatus;
@@ -12,13 +19,16 @@ import com.fieldops.modules.master.repository.ClientRepository;
 import com.fieldops.modules.master.repository.EquipmentRepository;
 import com.fieldops.modules.master.repository.SiteRepository;
 import com.fieldops.modules.master.repository.UserRepository;
+import com.fieldops.modules.template.domain.InspectionTemplate;
 import com.fieldops.modules.template.domain.ResponseType;
+import com.fieldops.modules.template.domain.TemplateStatus;
 import com.fieldops.modules.template.dto.TemplateItemRequest;
 import com.fieldops.modules.template.dto.TemplateRequest;
 import com.fieldops.modules.template.dto.TemplateResponse;
 import com.fieldops.modules.template.dto.TemplateSectionRequest;
 import com.fieldops.modules.template.repository.InspectionTemplateRepository;
 import com.fieldops.modules.template.service.TemplateService;
+import com.fieldops.security.jwt.AuthenticatedUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -27,9 +37,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,6 +64,9 @@ public class DevBootstrapSeedConfig {
             EquipmentRepository equipmentRepository,
             InspectionTemplateRepository templateRepository,
             TemplateService templateService,
+            InspectionRepository inspectionRepository,
+            InspectionSchedulingService inspectionSchedulingService,
+            TransactionTemplate transactionTemplate,
             PasswordEncoder passwordEncoder
     ) {
         return args -> {
@@ -62,6 +78,13 @@ public class DevBootstrapSeedConfig {
                     passwordEncoder
             );
             seedInitialTemplates(userRepository, templateRepository, templateService);
+            transactionTemplate.executeWithoutResult(ignored -> seedInitialInspections(
+                    userRepository,
+                    equipmentRepository,
+                    templateRepository,
+                    inspectionRepository,
+                    inspectionSchedulingService
+            ));
         };
     }
 
@@ -96,6 +119,14 @@ public class DevBootstrapSeedConfig {
                 "tecnico@fieldops.com",
                 UserRole.TECHNICIAN,
                 "+5511990000003"
+        );
+        seedDefaultUser(
+                userRepository,
+                passwordEncoder,
+                "Ana Ribeiro Técnica",
+                "ana.tecnica@fieldops.com",
+                UserRole.TECHNICIAN,
+                "+5511990000004"
         );
 
         if (clientRepository.count() > 0) {
@@ -429,6 +460,112 @@ public class DevBootstrapSeedConfig {
         );
 
         log.info("Massa inicial de modelos de inspeção (1 publicado e 1 rascunho) populada para validação.");
+    }
+
+    private void seedInitialInspections(
+            UserRepository userRepository,
+            EquipmentRepository equipmentRepository,
+            InspectionTemplateRepository templateRepository,
+            InspectionRepository inspectionRepository,
+            InspectionSchedulingService inspectionSchedulingService
+    ) {
+        if (inspectionRepository.count() > 0) {
+            return;
+        }
+
+        User supervisor = userRepository.findByEmailIgnoreCase("supervisor@fieldops.com").orElse(null);
+        User carlos = userRepository.findByEmailIgnoreCase("tecnico@fieldops.com").orElse(null);
+        User ana = userRepository.findByEmailIgnoreCase("ana.tecnica@fieldops.com").orElse(carlos);
+        InspectionTemplate publishedTemplate = templateRepository.findAll().stream()
+                .filter(t -> t.getStatus() == TemplateStatus.PUBLISHED && t.isActive())
+                .findFirst()
+                .orElse(null);
+
+        Equipment generator = equipmentRepository.findByQrCodeIgnoreCase("QR-FIELDOPS-GD001").orElse(null);
+        Equipment compressor = equipmentRepository.findByQrCodeIgnoreCase("QR-FIELDOPS-CP002").orElse(null);
+        Equipment transformer = equipmentRepository.findByQrCodeIgnoreCase("QR-FIELDOPS-TR003").orElse(null);
+
+        if (supervisor == null || carlos == null || ana == null || publishedTemplate == null
+                || generator == null || compressor == null || transformer == null) {
+            return;
+        }
+
+        AuthenticatedUser actor = new AuthenticatedUser(
+                supervisor.getId(),
+                supervisor.getEmail(),
+                supervisor.getRole()
+        );
+        Instant now = Instant.now();
+
+        inspectionSchedulingService.schedule(
+                new ScheduleInspectionRequest(
+                        publishedTemplate.getId(),
+                        null,
+                        null,
+                        generator.getSite().getClient().getId(),
+                        generator.getSite().getId(),
+                        generator.getId(),
+                        carlos.getId(),
+                        supervisor.getId(),
+                        now.plus(2, ChronoUnit.DAYS).toString(),
+                        null,
+                        "Inspeção Preventiva — Gerador Diesel GD-001",
+                        "Conferir nível de óleo, integridade da carenagem e painel antes da partida.",
+                        InspectionPriority.ALTA
+                ),
+                actor
+        );
+
+        inspectionSchedulingService.schedule(
+                new ScheduleInspectionRequest(
+                        publishedTemplate.getId(),
+                        null,
+                        null,
+                        compressor.getSite().getClient().getId(),
+                        compressor.getSite().getId(),
+                        compressor.getId(),
+                        ana.getId(),
+                        supervisor.getId(),
+                        now.minus(2, ChronoUnit.DAYS).toString(),
+                        null,
+                        "Inspeção Atrasada — Compressor Parafuso CP-002",
+                        "Prioridade urgente devido a atraso operacional na planta.",
+                        InspectionPriority.URGENTE
+                ),
+                actor
+        );
+
+        InspectionDetailsResponse approvedCreated = inspectionSchedulingService.schedule(
+                new ScheduleInspectionRequest(
+                        publishedTemplate.getId(),
+                        null,
+                        null,
+                        transformer.getSite().getClient().getId(),
+                        transformer.getSite().getId(),
+                        transformer.getId(),
+                        carlos.getId(),
+                        supervisor.getId(),
+                        now.minus(1, ChronoUnit.DAYS).toString(),
+                        null,
+                        "Inspeção Concluída e Aprovada — Transformador TR-003",
+                        "Checklist concluído e validado pela supervisão.",
+                        InspectionPriority.MEDIA
+                ),
+                actor
+        );
+
+        Inspection approvedEntity = inspectionRepository.findDetailedById(approvedCreated.id()).orElse(null);
+        if (approvedEntity != null) {
+            approvedEntity.setStatus(InspectionStatus.APROVADA);
+            approvedEntity.setStartedAtDevice(now.minus(6, ChronoUnit.HOURS));
+            approvedEntity.setStartedAtServer(now.minus(5, ChronoUnit.HOURS));
+            approvedEntity.setCompletedAtDevice(now.minus(3, ChronoUnit.HOURS));
+            approvedEntity.setSubmittedAtServer(now.minus(2, ChronoUnit.HOURS));
+            approvedEntity.setApprovedAt(now.minus(1, ChronoUnit.HOURS));
+            inspectionRepository.save(approvedEntity);
+        }
+
+        log.info("Massa inicial de inspeções (1 atribuída no prazo, 1 atribuída em atraso e 1 aprovada) populada para validação.");
     }
 }
 

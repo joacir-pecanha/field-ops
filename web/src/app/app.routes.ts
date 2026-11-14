@@ -133,13 +133,21 @@ export const routes: Routes = [
       },
       {
         path: 'inspections',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN', 'SUPERVISOR'],
-          title: 'Inspeções',
-          description: 'Planejamento, agendamento e revisão técnica (TASK-012 / TASK-020).',
-        },
+        loadComponent: () =>
+          import('./pages/inspections/inspection-list.component').then(
+            (m) => m.InspectionListComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
         title: 'Inspeções — FieldOps Admin',
+      },
+      {
+        path: 'inspections/new',
+        loadComponent: () =>
+          import('./pages/inspections/inspection-schedule.component').then(
+            (m) => m.InspectionScheduleComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Agendar Inspeção — FieldOps Admin',
       },
       {
         path: 'non-conformities',
