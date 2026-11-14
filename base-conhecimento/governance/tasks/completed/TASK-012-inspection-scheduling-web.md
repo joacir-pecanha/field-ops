@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-012
 - **Épico / Módulo:** Web Admin / Planejamento & Agendamento
-- **Status:** IN_PROGRESS
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-13
 
 ---
 
@@ -55,17 +55,17 @@ Para que a operação em campo aconteça de forma planejada, supervisores utiliz
 - [x] **Passo 1:** Criar serviço HTTP `inspection.service.ts` com métodos de agendamento, cancelamento e busca paginada com filtros.
 - [x] **Passo 2:** Desenvolver a tela `inspection-schedule.component` com selects dependentes e calendário para data prevista.
 - [x] **Passo 3:** Implementar componente de listagem com tabela responsiva, paginação e ordenação por data.
-- [ ] **Passo 4:** Criar componente `status-badge` e modal de cancelamento com validação de justificativa.
-- [ ] **Passo 5:** Escrever testes de componentes cobrindo seleção de cliente/local e submissão de agendamento.
+- [x] **Passo 4:** Criar componente `status-badge` e modal de cancelamento com validação de justificativa.
+- [x] **Passo 5:** Escrever testes de componentes cobrindo seleção de cliente/local e submissão de agendamento.
 
 ---
 
 ## 6. Critérios de Aceitação (Definition of Done)
-- [ ] **CA-01:** Supervisor consegue agendar uma inspeção completa em menos de 1 minuto pela interface.
-- [ ] **CA-02:** A lista de inspeções reflete o novo agendamento com o badge `ATRIBUÍDA`.
-- [ ] **CA-03:** O cancelamento exige justificativa e atualiza imediatamente o status para `CANCELADA`.
-- [ ] **CA-04:** Filtros por técnico e período funcionam corretamente sem quebra de layout.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-01:** Supervisor consegue agendar uma inspeção completa em menos de 1 minuto pela interface.
+- [x] **CA-02:** A lista de inspeções reflete o novo agendamento com o badge `ATRIBUÍDA`.
+- [x] **CA-03:** O cancelamento exige justificativa e atualiza imediatamente o status para `CANCELADA`.
+- [x] **CA-04:** Filtros por técnico e período funcionam corretamente sem quebra de layout.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
@@ -80,3 +80,17 @@ Para que a operação em campo aconteça de forma planejada, supervisores utiliz
     - `npm --prefix web run build`: aprovado (saída 0; `dist/web` gerado).
     - `npm --prefix web run test:ci`: **77/77 testes aprovados** (Edge Headless, saída 0).
     - `.\backend\mvnw.cmd -f backend\pom.xml test`: **31/31 testes aprovados** (`FieldOpsBackendApplicationTests`, `AuthControllerTest`, `InspectionSchedulingTest`, `MasterDataIntegrationTest`, `TemplateLifecycleTest`, saída 0).
+- **2026-11-13 (Conclusão Passos 4 e 5):**
+  - **Correção de filtro de modelos publicados (`inspection-schedule.component.ts`):** Ajustado o filtro inicial de modelos em `loadInitialOptions()` para exigir `tpl.active && (tpl.status === 'PUBLISHED' || tpl.currentVersion > 0)`, impedindo que rascunhos sem versão publicada (como `TPL-SUB-02`, que retorna `activeVersionId` preenchido pelo `workingVersion.id` no backend) apareçam no seletor de agendamento (`RF-02`). Validado pelo usuário.
+  - **Passo 4 (`web/src/app/pages/inspections/components/status-badge.component.ts` e `cancel-modal.component.ts`):**
+    - Extraído `StatusBadgeComponent` (`<app-status-badge>`) encapsulando as classes semânticas `tone-blue`, `tone-orange`, `tone-yellow`, `tone-green`, `tone-red` e `tone-gray` (`RT-03`) e suporte opcional ao selo de atraso (`RF-06`).
+    - Extraído `CancelModalComponent` (`<app-cancel-modal>`) com `FormControl` validando justificativa obrigatória não vazia (até 1000 caracteres), fechamento via tecla `Escape`, bloqueio explícito quando a inspeção estiver em estado `APROVADA` ou `CANCELADA` (`EX-02`) e exibição de erros de validação/API.
+    - Refatorados `inspection-list.component.ts` e `inspection-list.component.html` para utilizar `<app-status-badge>` e `<app-cancel-modal>`.
+  - **Passo 5 (`web/src/app/pages/inspections/inspection-schedule.component.spec.ts`):** Adicionados 17 testes unitários cobrindo filtragem de clientes/modelos publicados/técnicos ativos (excluindo rascunho `TPL-SUB-02`), seleção hierárquica via `valueChanges` (`Cliente -> Local -> Equipamento` e `Modelo -> Versão Publicada`), busca rápida por QR Code, bloqueio de submissão (`EX-01`), submissão válida com conversão ISO-8601, matriz semântica do `StatusBadgeComponent` (`RT-03`), validação do `CancelModalComponent` e fluxos da `InspectionListComponent` (atraso, debounce de 350ms, bloqueio em `APROVADA` e cancelamento com justificativa).
+  - **Evidências de verificação pós-Passos 4 e 5:**
+    - `npm --prefix web run typecheck`: aprovado (saída 0).
+    - `npm --prefix web run build`: aprovado (saída 0; `dist/web` gerado).
+    - `npm --prefix web run test:ci`: **94/94 testes aprovados** (Edge Headless, saída 0).
+- **2026-11-13 (Conclusão e Aprovação Final):**
+  - Validação e aprovação realizadas por **Joacir Peçanha** (`CA-05`).
+  - Task marcada como `COMPLETED` e movida para `base-conhecimento/governance/tasks/completed/TASK-012-inspection-scheduling-web.md`.

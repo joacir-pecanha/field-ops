@@ -285,18 +285,7 @@
                   }
                 </td>
                 <td>
-                  <span
-                    class="status-pill"
-                    [class.tone-blue]="statusTone(inspection.status) === 'blue'"
-                    [class.tone-orange]="statusTone(inspection.status) === 'orange'"
-                    [class.tone-yellow]="statusTone(inspection.status) === 'yellow'"
-                    [class.tone-green]="statusTone(inspection.status) === 'green'"
-                    [class.tone-red]="statusTone(inspection.status) === 'red'"
-                    [class.tone-gray]="statusTone(inspection.status) === 'gray'"
-                    data-testid="inspection-status-badge"
-                  >
-                    {{ statusLabel(inspection.status) }}
-                  </span>
+                  <app-status-badge [status]="inspection.status" />
                   @if (inspection.status === 'CANCELADA' && inspection.canceledReason) {
                     <div class="cell-secondary">Motivo: {{ inspection.canceledReason }}</div>
                   }
@@ -345,91 +334,14 @@
   </article>
 
   <!-- Modal obrigatório de Cancelamento com Justificativa (RF-07 / EX-02) -->
-  @if (cancelTarget(); as target) {
-    <div class="modal-backdrop" role="presentation" (click)="closeCancelModal()">
-      <section
-        class="modal-card modal-card-compact"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cancel-inspection-modal-title"
-        (click)="$event.stopPropagation()"
-        data-testid="cancel-inspection-modal"
-      >
-        <header class="modal-header">
-          <h2 id="cancel-inspection-modal-title">Cancelar Inspeção</h2>
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            (click)="closeCancelModal()"
-            [disabled]="cancelSaving()"
-          >
-            ✕
-          </button>
-        </header>
-
-        <div class="modal-body">
-          <div class="target-pill">
-            <strong>{{ target.title }}</strong>
-            <div class="cell-secondary">
-              {{ target.clientName }} • {{ target.siteName }} • Técnico:
-              {{ target.technicianName }}
-            </div>
-          </div>
-
-          @if (cancelError()) {
-            <div class="alert-banner alert-error" role="alert">
-              <div>
-                <strong>Não foi possível cancelar</strong>
-                <p>{{ cancelError() }}</p>
-              </div>
-            </div>
-          }
-
-          <div class="form-field">
-            <label for="cancel-reason-input">Justificativa do cancelamento *</label>
-            <textarea
-              id="cancel-reason-input"
-              name="cancelReason"
-              rows="3"
-              maxlength="1000"
-              [(ngModel)]="cancelReason"
-              placeholder="Descreva o motivo operacional do cancelamento (obrigatório)..."
-              data-testid="cancel-reason-input"
-            ></textarea>
-            <span class="field-hint">
-              A justificativa, o responsável e o horário serão registrados na trilha de auditoria
-              (RN-029).
-            </span>
-          </div>
-        </div>
-
-        <footer class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            (click)="closeCancelModal()"
-            [disabled]="cancelSaving()"
-          >
-            Voltar
-          </button>
-          <button
-            type="button"
-            class="btn btn-danger"
-            (click)="confirmCancel()"
-            [disabled]="cancelSaving() || !cancelReason.trim()"
-            data-testid="confirm-cancel-inspection-btn"
-          >
-            @if (cancelSaving()) {
-              <span class="inline-spinner"></span>
-              <span>Cancelando...</span>
-            } @else {
-              <span>Confirmar Cancelamento</span>
-            }
-          </button>
-        </footer>
-      </section>
-    </div>
-  }
+  <app-cancel-modal
+    [open]="cancelTarget() !== null"
+    [inspection]="cancelTarget()"
+    [loading]="cancelSaving()"
+    [errorMessage]="cancelError()"
+    (confirmed)="confirmCancel($event)"
+    (cancelled)="closeCancelModal()"
+  />
 
   <!-- Modal de Detalhes, Snapshot de Itens e Auditoria -->
   @if (detailsTarget(); as detail) {
@@ -456,21 +368,11 @@
 
         <div class="modal-body">
           <div class="summary-strip">
-            <span
-              class="status-pill"
-              [class.tone-blue]="statusTone(detail.status) === 'blue'"
-              [class.tone-orange]="statusTone(detail.status) === 'orange'"
-              [class.tone-yellow]="statusTone(detail.status) === 'yellow'"
-              [class.tone-green]="statusTone(detail.status) === 'green'"
-              [class.tone-red]="statusTone(detail.status) === 'red'"
-              [class.tone-gray]="statusTone(detail.status) === 'gray'"
-            >
-              {{ statusLabel(detail.status) }}
-            </span>
-
-            @if (detail.overdue) {
-              <span class="overdue-badge">⚠ Em atraso</span>
-            }
+            <app-status-badge
+              [status]="detail.status"
+              [overdue]="detail.overdue"
+              [showOverdueBadge]="true"
+            />
 
             <span>
               Prevista para:

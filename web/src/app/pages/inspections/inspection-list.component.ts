@@ -16,6 +16,8 @@ import { NotificationService } from '../../core/services/notification.service';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { sortIndicatorFor, toggleSortExpression } from '../../shared/utils/form-error.utils';
 import { getResponseTypeLabel } from '../templates/template.service';
+import { CancelModalComponent } from './components/cancel-modal.component';
+import { StatusBadgeComponent } from './components/status-badge.component';
 import {
   AuditLogResponse,
   INSPECTION_PRIORITY_OPTIONS,
@@ -25,17 +27,21 @@ import {
   InspectionPriority,
   InspectionService,
   InspectionStatus,
-  InspectionStatusTone,
   canCancelInspection,
   getInspectionPriorityLabel,
-  getInspectionStatusLabel,
-  getInspectionStatusTone,
 } from './inspection.service';
 
 @Component({
   selector: 'app-inspection-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PaginationComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    PaginationComponent,
+    StatusBadgeComponent,
+    CancelModalComponent,
+  ],
   templateUrl: './inspection-list.component.html',
   styles: [
     `
@@ -92,53 +98,6 @@ import {
         text-transform: uppercase;
       }
 
-      .status-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.22rem 0.62rem;
-        border-radius: 999px;
-        font-size: 0.74rem;
-        font-weight: 700;
-        white-space: nowrap;
-        border: 1px solid transparent;
-
-        &.tone-blue {
-          background: #eff6ff;
-          color: #1d4ed8;
-          border-color: #bfdbfe;
-        }
-
-        &.tone-orange {
-          background: #fff7ed;
-          color: #c2410c;
-          border-color: #fed7aa;
-        }
-
-        &.tone-yellow {
-          background: #fefce8;
-          color: #a16207;
-          border-color: #fde047;
-        }
-
-        &.tone-green {
-          background: #ecfdf5;
-          color: #047857;
-          border-color: #a7f3d0;
-        }
-
-        &.tone-red {
-          background: #fef2f2;
-          color: #b91c1c;
-          border-color: #fecaca;
-        }
-
-        &.tone-gray {
-          background: #f1f5f9;
-          color: #475569;
-          border-color: #cbd5e1;
-        }
-      }
-
       .priority-badge {
         display: inline-flex;
         align-items: center;
@@ -176,10 +135,6 @@ import {
 
       .modal-card-wide {
         max-width: 820px;
-      }
-
-      .modal-card-compact {
-        max-width: 520px;
       }
 
       .details-grid {
@@ -295,7 +250,6 @@ export class InspectionListComponent implements OnInit {
   readonly cancelTarget = signal<InspectionDetailsResponse | null>(null);
   readonly cancelSaving = signal(false);
   readonly cancelError = signal<string | null>(null);
-  cancelReason = '';
 
   // Estado do modal de detalhes / snapshot / auditoria
   readonly detailsTarget = signal<InspectionDetailsResponse | null>(null);
@@ -433,14 +387,6 @@ export class InspectionListComponent implements OnInit {
     this.loadInspections();
   }
 
-  statusLabel(status: InspectionStatus): string {
-    return getInspectionStatusLabel(status);
-  }
-
-  statusTone(status: InspectionStatus): InspectionStatusTone {
-    return getInspectionStatusTone(status);
-  }
-
   priorityLabel(priority: InspectionPriority): string {
     return getInspectionPriorityLabel(priority);
   }
@@ -468,7 +414,6 @@ export class InspectionListComponent implements OnInit {
       return;
     }
     this.cancelTarget.set(inspection);
-    this.cancelReason = '';
     this.cancelError.set(null);
   }
 
@@ -477,14 +422,13 @@ export class InspectionListComponent implements OnInit {
       return;
     }
     this.cancelTarget.set(null);
-    this.cancelReason = '';
     this.cancelError.set(null);
   }
 
-  confirmCancel(): void {
+  confirmCancel(reason: string): void {
     const target = this.cancelTarget();
-    const trimmedReason = this.cancelReason.trim();
-    if (!target || this.cancelSaving()) {
+    const trimmedReason = reason.trim();
+    if (!target || this.cancelSaving() || !this.canCancel(target)) {
       return;
     }
     if (!trimmedReason) {
@@ -501,7 +445,6 @@ export class InspectionListComponent implements OnInit {
       .subscribe({
         next: (updated) => {
           this.cancelTarget.set(null);
-          this.cancelReason = '';
           this.notifications.showSuccess(
             `Inspeção "${updated.title}" cancelada com registro de auditoria.`
           );
