@@ -31,7 +31,7 @@ export type InspectionSyncStatus =
   | 'ERRO'
   | 'CONFLITO';
 
-export type InspectionPriority = 'BAIXA' | 'MEDIA' | 'ALTA' | 'CRITICA' | string;
+export type InspectionPriority = 'BAIXA' | 'MEDIA' | 'ALTA' | 'CRITICA' | 'URGENTE' | string;
 
 export interface Inspection {
   id: string;
@@ -54,10 +54,72 @@ export interface Inspection {
   created_at?: string;
   updated_at?: string;
 
+  // Metadados opcionais enriquecidos (sincronização / sessão)
+  technician_id?: string | null;
+  technician_name?: string | null;
+  title?: string | null;
+  instructions?: string | null;
+
   // Aliases para retrocompatibilidade com UI / stubs
   client?: string;
   site?: string;
   equipment?: string;
+}
+
+export type InspectionFilterTab = 'TODAS' | 'PENDENTES' | 'EM_ANDAMENTO' | 'CONCLUÍDAS';
+
+export interface InspectionFilterParams {
+  status?: InspectionFilterTab | InspectionBusinessStatus | string;
+  searchQuery?: string;
+  priority?: InspectionPriority | 'TODAS';
+  syncStatus?: InspectionSyncStatus;
+  onlyOverdue?: boolean;
+  onlyDueToday?: boolean;
+  technicianId?: string | null;
+}
+
+export interface InspectionSummaryMetrics {
+  total: number;
+  today: number;
+  overdue: number;
+  delayed: number;
+  inProgress: number;
+  pending: number;
+  completed: number;
+  pendingSync: number;
+}
+
+export type InspectionActionType = 'START' | 'CONTINUE' | 'VIEW';
+
+export interface InspectionActionConfig {
+  type: InspectionActionType;
+  label: 'Iniciar Inspeção' | 'Continuar Checklist' | 'Consultar';
+  shortLabel: 'Iniciar' | 'Continuar' | 'Consultar';
+  icon: 'play-arrow' | 'playlist-play' | 'visibility';
+  variant: 'primary' | 'secondary';
+  disabled: boolean;
+  isReadOnly: boolean;
+}
+
+export interface InspectionDetailsData {
+  inspection: Inspection;
+  sections: ChecklistSection[];
+  items: ChecklistItem[];
+  responses: ChecklistResponse[];
+  evidences: InspectionEvidence[];
+  pendingOperations: OutboxOperation[];
+  progress: {
+    totalItems: number;
+    answeredItems: number;
+    requiredItems: number;
+    pendingRequiredItems: number;
+    nonConformitiesCount: number;
+    evidencesCount: number;
+    percentage: number;
+  };
+  isOverdue: boolean;
+  isPendingSync: boolean;
+  action: InspectionActionConfig;
 }
 
 // 3. Seções do Checklist

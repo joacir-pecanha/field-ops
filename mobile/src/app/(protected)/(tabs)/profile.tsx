@@ -1,10 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Alert, Platform, ScrollView } from 'react-native';
 import { tokens } from '@/design-system/tokens';
 import { Button } from '@/design-system/components/Button';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { seedDatabase } from '@/infrastructure/database';
 import { MaterialIcons } from '@expo/vector-icons';
+
+function showFeedbackAlert(title: string, message: string) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
+    window.alert(`${title}\n\n${message}`);
+    return;
+  }
+  Alert.alert(title, message);
+}
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -19,14 +27,25 @@ export default function ProfileScreen() {
   const handleSeed = async () => {
     try {
       await seedDatabase();
-      Alert.alert('Sucesso', 'Banco de dados populado com dados de teste!');
+      showFeedbackAlert('Sucesso', 'Banco de dados populado com dados de teste!');
     } catch (e) {
       console.error(e);
-      Alert.alert('Erro', 'Falha ao popular banco de dados.');
+      showFeedbackAlert('Erro', 'Falha ao popular banco de dados.');
     }
   };
 
   const handleLogout = () => {
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof window !== 'undefined' && typeof window.confirm === 'function'
+          ? window.confirm('Tem certeza que deseja sair?')
+          : true;
+      if (confirmed) {
+        void logout();
+      }
+      return;
+    }
+
     Alert.alert('Sair', 'Tem certeza que deseja sair?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Sair', style: 'destructive', onPress: logout },

@@ -11,9 +11,17 @@ export async function resolve(specifier, context, nextResolve) {
     return nextResolve(new URL('./mocks/expo-secure-store.mjs', import.meta.url).href, context);
   }
 
+  if (specifier === '@expo/vector-icons') {
+    return nextResolve(new URL('./mocks/expo-vector-icons.mjs', import.meta.url).href, context);
+  }
+
+  if (specifier === 'expo-router') {
+    return nextResolve(new URL('./mocks/expo-router.mjs', import.meta.url).href, context);
+  }
+
   let target = specifier;
   if (specifier.startsWith('@/')) {
-    target = fileURLToPath(new URL(`../src/${specifier.slice(2)}`, import.meta.url));
+    target = new URL(`../src/${specifier.slice(2)}`, import.meta.url).href;
   }
 
   try {
@@ -21,7 +29,10 @@ export async function resolve(specifier, context, nextResolve) {
   } catch (err) {
     if (
       (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'ERR_UNSUPPORTED_DIR_IMPORT') &&
-      (target.startsWith('.') || target.startsWith('/') || /^[a-zA-Z]:/.test(target))
+      (target.startsWith('.') ||
+        target.startsWith('/') ||
+        target.startsWith('file://') ||
+        /^[a-zA-Z]:/.test(target))
     ) {
       for (const ext of ['.ts', '.tsx', '/index.ts', '/index.tsx']) {
         try {
@@ -34,7 +45,16 @@ export async function resolve(specifier, context, nextResolve) {
 }
 
 export async function load(url, context, nextLoad) {
-  if (url.endsWith('.tsx') || (url.endsWith('.ts') && (url.includes('components') || url.includes('auth')))) {
+  if (
+    url.endsWith('.tsx') ||
+    (url.endsWith('.ts') &&
+      (url.includes('components') ||
+        url.includes('auth') ||
+        url.includes('inspections') ||
+        url.includes('sync') ||
+        url.includes('database') ||
+        url.includes('design-system')))
+  ) {
     const filePath = fileURLToPath(url);
     const source = fs.readFileSync(filePath, 'utf8');
     const transpiled = ts.transpileModule(source, {

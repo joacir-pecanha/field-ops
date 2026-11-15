@@ -17,7 +17,7 @@ export class NetworkMonitor implements INetworkMonitor {
   private mockOnline: boolean | null = null;
   private cachedOnline: boolean = true;
   private checkIntervalTimer: any = null;
-  private pingUrl: string = 'https://clients3.google.com/generate_204';
+  private pingUrl: string = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080'}/actuator/health`;
   private pingTimeoutMs: number = 3000;
 
   constructor(options?: { pingUrl?: string; pingTimeoutMs?: number; initialOnline?: boolean }) {
@@ -83,7 +83,7 @@ export class NetworkMonitor implements INetworkMonitor {
         : null;
 
       const response = await fetch(this.pingUrl, {
-        method: 'HEAD',
+        method: 'GET',
         cache: 'no-store',
         signal: controller ? controller.signal : undefined,
       }).catch(() => null);
