@@ -18,10 +18,16 @@ import {
   EMPTY_INSPECTIONS_MESSAGE,
   InspectionCard,
   type InspectionListItem,
+  type UseInspectionListOptions,
   useInspectionList,
 } from '@/features/inspections';
 import { useSyncStatus } from '@/features/sync';
 import { type Inspection } from '@/infrastructure/database/types';
+
+export interface HomeScreenProps {
+  listOptions?: UseInspectionListOptions;
+  user?: { name?: string | null } | null;
+}
 
 const FINISHED_STATUSES = new Set([
   'ENVIADA',
@@ -34,9 +40,11 @@ const FINISHED_STATUSES = new Set([
   'CANCELLED',
 ]);
 
-export default function HomeScreen() {
+export default function HomeScreen(props: HomeScreenProps) {
+  const { listOptions, user: userOverride } = props ?? {};
   const router = useRouter();
   const { user } = useAuth();
+  const activeUser = userOverride !== undefined ? userOverride : user;
   const {
     pendingCount,
     isSyncing,
@@ -55,7 +63,7 @@ export default function HomeScreen() {
     dismissSnackbar,
     reloadLocal,
     refresh,
-  } = useInspectionList();
+  } = useInspectionList(listOptions);
 
   const [isQuickSyncing, setIsQuickSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{
@@ -67,10 +75,10 @@ export default function HomeScreen() {
   const effectiveOnline = syncIsOnline && listIsOnline;
   const totalPendingSync = Math.max(metrics.pendingSync, pendingCount);
   const firstName = useMemo(() => {
-    const raw = user?.name?.trim();
+    const raw = activeUser?.name?.trim();
     if (!raw) return 'Técnico';
     return raw.split(' ')[0];
-  }, [user?.name]);
+  }, [activeUser?.name]);
 
   useFocusEffect(
     useCallback(() => {

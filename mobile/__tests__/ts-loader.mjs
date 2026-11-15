@@ -15,6 +15,10 @@ export async function resolve(specifier, context, nextResolve) {
     return nextResolve(new URL('./mocks/expo-vector-icons.mjs', import.meta.url).href, context);
   }
 
+  if (specifier === 'expo-router') {
+    return nextResolve(new URL('./mocks/expo-router.mjs', import.meta.url).href, context);
+  }
+
   let target = specifier;
   if (specifier.startsWith('@/')) {
     target = new URL(`../src/${specifier.slice(2)}`, import.meta.url).href;
@@ -47,6 +51,8 @@ export async function load(url, context, nextLoad) {
       (url.includes('components') ||
         url.includes('auth') ||
         url.includes('inspections') ||
+        url.includes('sync') ||
+        url.includes('database') ||
         url.includes('design-system')))
   ) {
     const filePath = fileURLToPath(url);

@@ -71,6 +71,13 @@ export interface RefreshInspectionsResult extends LoadInspectionsResult {
   snackbar: SnackbarState | null;
 }
 
+export interface UseInspectionListInitialData extends Partial<LoadInspectionsResult> {
+  snackbar?: SnackbarState | null;
+  isOnline?: boolean;
+  isLoading?: boolean;
+  isRefreshing?: boolean;
+}
+
 export interface UseInspectionListOptions {
   technicianId?: string | null;
   initialStatusFilter?: InspectionFilterTab;
@@ -79,6 +86,7 @@ export interface UseInspectionListOptions {
   onlyOverdue?: boolean;
   onlyDueToday?: boolean;
   autoLoad?: boolean;
+  initialData?: UseInspectionListInitialData;
   inspectionRepository?: InspectionRepository;
   outboxRepository?: OutboxRepository;
   networkMonitor?: INetworkMonitor;
@@ -293,25 +301,41 @@ export function useInspectionList(options: UseInspectionListOptions = {}) {
   const [onlyOverdue, setOnlyOverdue] = useState<boolean>(Boolean(options.onlyOverdue));
   const [onlyDueToday, setOnlyDueToday] = useState<boolean>(Boolean(options.onlyDueToday));
 
-  const [items, setItems] = useState<InspectionListItem[]>([]);
-  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set());
-  const [metrics, setMetrics] = useState<InspectionSummaryMetrics>({
-    total: 0,
-    today: 0,
-    overdue: 0,
-    delayed: 0,
-    inProgress: 0,
-    pending: 0,
-    completed: 0,
-    pendingSync: 0,
-  });
-  const [isLoading, setIsLoading] = useState<boolean>(options.autoLoad !== false);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isOnline, setIsOnline] = useState<boolean>(true);
-  const [isEmpty, setIsEmpty] = useState<boolean>(false);
-  const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
+  const initialData = options.initialData;
+  const [items, setItems] = useState<InspectionListItem[]>(() => initialData?.items ?? []);
+  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(
+    () => initialData?.pendingSyncIds ?? new Set()
+  );
+  const [metrics, setMetrics] = useState<InspectionSummaryMetrics>(
+    () =>
+      initialData?.metrics ?? {
+        total: 0,
+        today: 0,
+        overdue: 0,
+        delayed: 0,
+        inProgress: 0,
+        pending: 0,
+        completed: 0,
+        pendingSync: 0,
+      }
+  );
+  const [isLoading, setIsLoading] = useState<boolean>(
+    initialData?.isLoading ?? (initialData ? false : options.autoLoad !== false)
+  );
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(
+    initialData?.isRefreshing ?? false
+  );
+  const [isOnline, setIsOnline] = useState<boolean>(initialData?.isOnline ?? true);
+  const [isEmpty, setIsEmpty] = useState<boolean>(
+    initialData?.isEmpty ?? (initialData?.items ? initialData.items.length === 0 : false)
+  );
+  const [emptyMessage, setEmptyMessage] = useState<string | null>(
+    initialData?.emptyMessage ?? null
+  );
   const [error, setError] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState<SnackbarState | null>(null);
+  const [snackbar, setSnackbar] = useState<SnackbarState | null>(
+    initialData?.snackbar ?? null
+  );
 
   const dismissSnackbar = useCallback(() => {
     setSnackbar(null);

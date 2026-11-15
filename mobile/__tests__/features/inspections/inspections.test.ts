@@ -1,8 +1,9 @@
 import { beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import './InspectionCard.test';
+import './InspectionScreens.test';
+import { createTestSqliteDb } from './sqliteTestDb';
 import { runMigrations } from '../../../src/infrastructure/database/migrations';
 import {
   InspectionRepository,
@@ -21,42 +22,6 @@ import {
   refreshInspectionDetails,
 } from '../../../src/features/inspections/hooks/useInspectionDetails';
 import { NetworkMonitor } from '../../../src/infrastructure/sync/networkMonitor';
-
-function createTestSqliteDb(): SQLiteDatabase {
-  const rawDb = new DatabaseSync(':memory:');
-
-  const adapter: Partial<SQLiteDatabase> = {
-    async execAsync(source: string) {
-      rawDb.exec(source);
-    },
-    async runAsync(source: string, ...params: any[]) {
-      const flatParams = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-      const stmt = rawDb.prepare(source);
-      const result = stmt.run(...flatParams);
-      return {
-        lastInsertRowId: Number(result.lastInsertRowid ?? 0),
-        changes: Number(result.changes ?? 0),
-      };
-    },
-    async getFirstAsync<T>(source: string, ...params: any[]) {
-      const flatParams = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-      const stmt = rawDb.prepare(source);
-      const row = stmt.get(...flatParams);
-      return (row as T) ?? null;
-    },
-    async getAllAsync<T>(source: string, ...params: any[]) {
-      const flatParams = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-      const stmt = rawDb.prepare(source);
-      const rows = stmt.all(...flatParams);
-      return (rows as T[]) ?? [];
-    },
-    async closeAsync() {
-      rawDb.close();
-    },
-  };
-
-  return adapter as SQLiteDatabase;
-}
 
 const REF_DATE = new Date('2026-11-14T12:00:00.000Z');
 

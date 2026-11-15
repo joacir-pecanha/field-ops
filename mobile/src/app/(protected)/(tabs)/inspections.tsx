@@ -19,12 +19,17 @@ import {
   EMPTY_INSPECTIONS_MESSAGE,
   InspectionCard,
   type InspectionListItem,
+  type UseInspectionListOptions,
   useInspectionList,
 } from '@/features/inspections';
 import {
   type Inspection,
   type InspectionFilterTab,
 } from '@/infrastructure/database/types';
+
+export interface InspectionsScreenProps {
+  listOptions?: UseInspectionListOptions;
+}
 
 const FILTER_TABS: Array<{ key: InspectionFilterTab; label: string }> = [
   { key: 'TODAS', label: 'Todas' },
@@ -42,7 +47,8 @@ function isValidFilterTab(value?: string): value is InspectionFilterTab {
   );
 }
 
-export default function InspectionsScreen() {
+export default function InspectionsScreen(props: InspectionsScreenProps) {
+  const { listOptions } = props ?? {};
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string; filter?: string }>();
   const autoSyncAttemptedRef = useRef(false);
@@ -66,7 +72,7 @@ export default function InspectionsScreen() {
     dismissSnackbar,
     reloadLocal,
     refresh,
-  } = useInspectionList();
+  } = useInspectionList(listOptions);
 
   // Sincroniza filtros recebidos via navegação da Home
   useEffect(() => {

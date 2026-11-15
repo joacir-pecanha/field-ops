@@ -19,6 +19,7 @@ import {
   PERMISSION_DENIED_MESSAGE,
   PriorityBadge,
   SyncStatusBadge,
+  type UseInspectionDetailsOptions,
   useInspectionDetails,
 } from '@/features/inspections';
 import { inspectionRepository } from '@/infrastructure/database/repositories/inspectionRepository';
@@ -26,6 +27,11 @@ import {
   type ChecklistItem,
   type ChecklistSection,
 } from '@/infrastructure/database/types';
+
+export interface InspectionDetailsScreenProps {
+  inspectionId?: string;
+  detailsOptions?: UseInspectionDetailsOptions;
+}
 
 function formatDateTime(isoDate?: string | null): string {
   if (!isoDate) {
@@ -60,13 +66,14 @@ function formatResponseTypeLabel(type: string): string {
   }
 }
 
-export default function InspectionDetailsScreen() {
+export default function InspectionDetailsScreen(props: InspectionDetailsScreenProps) {
+  const { inspectionId: propInspectionId, detailsOptions } = props ?? {};
   const router = useRouter();
   const params = useLocalSearchParams<{ inspectionId?: string; id?: string }>();
   const resolvedId = useMemo(() => {
-    const raw = params.inspectionId ?? params.id;
+    const raw = propInspectionId ?? params.inspectionId ?? params.id;
     return Array.isArray(raw) ? raw[0] : raw;
-  }, [params.inspectionId, params.id]);
+  }, [propInspectionId, params.inspectionId, params.id]);
 
   const {
     inspection,
@@ -88,7 +95,7 @@ export default function InspectionDetailsScreen() {
     dismissSnackbar,
     reloadLocal,
     refresh,
-  } = useInspectionDetails(resolvedId);
+  } = useInspectionDetails(resolvedId, detailsOptions);
 
   const [isUpdatingAction, setIsUpdatingAction] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{

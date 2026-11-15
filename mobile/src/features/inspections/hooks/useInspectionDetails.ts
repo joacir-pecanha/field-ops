@@ -70,10 +70,17 @@ export interface LoadInspectionDetailsResult {
   snackbar: SnackbarState | null;
 }
 
+export interface UseInspectionDetailsInitialData extends Partial<LoadInspectionDetailsResult> {
+  isOnline?: boolean;
+  isLoading?: boolean;
+  isRefreshing?: boolean;
+}
+
 export interface UseInspectionDetailsOptions {
   technicianId?: string | null;
   userRole?: string | null;
   autoLoad?: boolean;
+  initialData?: UseInspectionDetailsInitialData;
   inspectionRepository?: InspectionRepository;
   networkMonitor?: INetworkMonitor;
   fetchRemoteById?: (id: string) => Promise<any>;
@@ -349,15 +356,30 @@ export function useInspectionDetails(
   const onPermissionDeniedRef = useRef(options.onPermissionDenied);
   onPermissionDeniedRef.current = options.onPermissionDenied;
 
-  const [details, setDetails] = useState<InspectionDetailsData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(options.autoLoad !== false);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isOnline, setIsOnline] = useState<boolean>(true);
-  const [isForbidden, setIsForbidden] = useState<boolean>(false);
-  const [permissionDeniedMessage, setPermissionDeniedMessage] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState<SnackbarState | null>(null);
+  const initialData = options.initialData;
+  const [details, setDetails] = useState<InspectionDetailsData | null>(
+    () => initialData?.details ?? null
+  );
+  const [isLoading, setIsLoading] = useState<boolean>(
+    initialData?.isLoading ?? (initialData ? false : options.autoLoad !== false)
+  );
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(
+    initialData?.isRefreshing ?? false
+  );
+  const [isOnline, setIsOnline] = useState<boolean>(initialData?.isOnline ?? true);
+  const [isForbidden, setIsForbidden] = useState<boolean>(
+    initialData?.isForbidden ?? false
+  );
+  const [permissionDeniedMessage, setPermissionDeniedMessage] = useState<string | null>(
+    initialData?.permissionDeniedMessage ?? null
+  );
+  const [notFound, setNotFound] = useState<boolean>(initialData?.notFound ?? false);
+  const [error, setError] = useState<string | null>(
+    initialData?.notFound ? INSPECTION_NOT_FOUND_MESSAGE : null
+  );
+  const [snackbar, setSnackbar] = useState<SnackbarState | null>(
+    initialData?.snackbar ?? null
+  );
 
   const dismissSnackbar = useCallback(() => {
     setSnackbar(null);
