@@ -22,11 +22,17 @@ import {
   type UseInspectionDetailsOptions,
   useInspectionDetails,
 } from '@/features/inspections';
+import { DynamicItemRenderer } from '@/features/checklist';
+import { getEquipmentVerificationRecord } from '@/features/scanner/services/qrValidator';
+import { getDatabase } from '@/infrastructure/database/db';
 import { inspectionRepository } from '@/infrastructure/database/repositories/inspectionRepository';
+import { outboxRepository } from '@/infrastructure/database/repositories/outboxRepository';
 import {
   type ChecklistItem,
+  type ChecklistResponse,
   type ChecklistSection,
 } from '@/infrastructure/database/types';
+import { generateUUID } from '@/infrastructure/sync/uuid';
 
 export interface InspectionDetailsScreenProps {
   inspectionId?: string;
@@ -66,10 +72,52 @@ function formatResponseTypeLabel(type: string): string {
   }
 }
 
+function parseStoredResponseValue(
+  item: ChecklistItem,
+  rawValue?: string | null
+): unknown {
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return item.response_type === 'BOOLEAN' ? undefined : '';
+  }
+  if (item.response_type === 'BOOLEAN') {
+    if (rawValue === 'true') return true;
+    if (rawValue === 'false') return false;
+  }
+  if (item.response_type === 'NUMBER') {
+    const num = Number(rawValue);
+    return Number.isFinite(num) ? num : rawValue;
+  }
+  return rawValue;
+}
+
+function serializeChecklistValue(nextValue: unknown): string {
+  if (nextValue === null || nextValue === undefined) {
+    return '';
+  }
+  if (typeof nextValue === 'string') {
+    return nextValue;
+  }
+  if (typeof nextValue === 'boolean' || typeof nextValue === 'number') {
+    return String(nextValue);
+  }
+  try {
+    return JSON.stringify(nextValue);
+  } catch {
+    return String(nextValue);
+  }
+}
+
 export default function InspectionDetailsScreen(props: InspectionDetailsScreenProps) {
   const { inspectionId: propInspectionId, detailsOptions } = props ?? {};
   const router = useRouter();
-  const params = useLocalSearchParams<{ inspectionId?: string; id?: string }>();
+  const params = useLocalSearchParams<{
+    inspectionId?: string;
+    id?: string;
+    qrVerified?: string;
+    openChecklist?: string;
+    scannedCode?: string;
+    divergenceJustified?: string;
+  }>();
   const resolvedId = useMemo(() => {
     const raw = propInspectionId ?? params.inspectionId ?? params.id;
     return Array.isArray(raw) ? raw[0] : raw;
@@ -98,11 +146,27 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
   } = useInspectionDetails(resolvedId, detailsOptions);
 
   const [isUpdatingAction, setIsUpdatingAction] = useState(false);
+  const [isChecklistInteractive, setIsChecklistInteractive] = useState(
+    Boolean(params.openChecklist === 'true' || params.qrVerified === 'true')
+  );
   const [actionFeedback, setActionFeedback] = useState<{
     type: 'success' | 'info';
     text: string;
   } | null>(null);
   const isFirstFocusRef = useRef(true);
+
+  useEffect(() => {
+    if (params.openChecklist === 'true' || params.qrVerified === 'true') {
+      setIsChecklistInteractive(true);
+      setActionFeedback({
+        type: 'success',
+        text:
+          params.divergenceJustified === 'true'
+            ? 'Divergência registrada com justificativa. Checklist liberado para preenchimento offline.'
+            : 'Equipamento validado via QR Code! Preencha os itens do checklist abaixo.',
+      });
+    }
+  }, [params.openChecklist, params.qrVerified, params.divergenceJustified]);
 
   useFocusEffect(
     useCallback(() => {
@@ -134,6 +198,97 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     }
     return ids;
   }, [responses]);
+
+  const responseByItemId = useMemo(() => {
+    const map = new Map<string, ChecklistResponse>();
+    for (const r of responses) {
+      map.set(r.item_id, r);
+    }
+    return map;
+  }, [responses]);
+
+  const verificationRecord = inspection
+    ? getEquipmentVerificationRecord(inspection.id)
+    : null;
+  const isQrVerified = Boolean(verificationRecord) || params.qrVerified === 'true';
+  const isEditableInspection = action.type === 'START' || action.type === 'CONTINUE';
+
+  const handleSaveChecklistAnswer = useCallback(
+    async (
+      item: ChecklistItem,
+      nextValue: unknown,
+      nonConformityDescription?: string
+    ) => {
+      if (!inspection) return;
+      const serialized = serializeChecklistValue(nextValue);
+      const isNonConformity =
+        item.response_type === 'CONFORMITY' && serialized === 'NON_CONFORMING' ? 1 : 0;
+      const respondedAt = new Date().toISOString();
+      const existing = responseByItemId.get(item.id);
+      const responseId = existing?.id ?? generateUUID();
+      const finalNcDescription =
+        isNonConformity === 1
+          ? nonConformityDescription ?? existing?.non_conformity_description ?? null
+          : null;
+
+      try {
+        const db = await getDatabase();
+        await db.runAsync(
+          `INSERT INTO checklist_responses (
+            id, item_id, inspection_id, value, is_non_conformity, non_conformity_description, responded_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(item_id) DO UPDATE SET
+            value = excluded.value,
+            is_non_conformity = excluded.is_non_conformity,
+            non_conformity_description = excluded.non_conformity_description,
+            responded_at = excluded.responded_at;`,
+          [
+            responseId,
+            item.id,
+            inspection.id,
+            serialized,
+            isNonConformity,
+            finalNcDescription,
+            respondedAt,
+          ]
+        );
+
+        await inspectionRepository.update(inspection.id, {
+          status:
+            inspection.status === 'ATRIBUÍDA' || inspection.status === 'RASCUNHO'
+              ? 'EM_ANDAMENTO'
+              : inspection.status,
+          started_at: inspection.started_at ?? respondedAt,
+          sync_status: 'PENDENTE',
+        });
+
+        await outboxRepository.create({
+          id: generateUUID(),
+          entity_type: 'CHECKLIST_RESPONSE',
+          global_id: responseId,
+          operation_type: 'SUBMIT_RESPONSE',
+          payload: JSON.stringify({
+            id: responseId,
+            inspectionId: inspection.id,
+            itemId: item.id,
+            value: serialized,
+            isNonConformity: isNonConformity === 1,
+            nonConformityDescription: finalNcDescription,
+            respondedAt,
+          }),
+          status: 'PENDING',
+        });
+
+        await reloadLocal();
+      } catch {
+        setActionFeedback({
+          type: 'info',
+          text: 'Não foi possível salvar a resposta no SQLite local neste momento.',
+        });
+      }
+    },
+    [inspection, responseByItemId, reloadLocal]
+  );
 
   const groupedSections = useMemo(() => {
     const bySection = new Map<string, ChecklistItem[]>();
@@ -167,6 +322,14 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     if (!inspection) return;
 
     if (action.type === 'START') {
+      if (!isQrVerified) {
+        router.push({
+          pathname: '/(protected)/scanner',
+          params: { inspectionId: inspection.id },
+        });
+        return;
+      }
+
       setIsUpdatingAction(true);
       setActionFeedback(null);
       try {
@@ -176,9 +339,10 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
           sync_status: 'PENDENTE',
         });
         await reloadLocal();
+        setIsChecklistInteractive(true);
         setActionFeedback({
           type: 'success',
-          text: 'Inspeção iniciada no dispositivo (EM_ANDAMENTO). Você já pode continuar o checklist.',
+          text: 'Inspeção iniciada no dispositivo (EM_ANDAMENTO). Você já pode responder ao checklist abaixo.',
         });
       } finally {
         setIsUpdatingAction(false);
@@ -187,9 +351,10 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     }
 
     if (action.type === 'CONTINUE') {
+      setIsChecklistInteractive(true);
       setActionFeedback({
         type: 'info',
-        text: `Checklist em andamento (${progress.answeredItems}/${progress.totalItems} itens respondidos). Execução interativa dos itens será conectada na TASK-014.`,
+        text: `Checklist interativo ativo (${progress.answeredItems}/${progress.totalItems} itens respondidos). As respostas são salvas offline automaticamente.`,
       });
       return;
     }
@@ -198,7 +363,15 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       type: 'info',
       text: `Modo consulta (somente leitura) para inspeção no estado ${inspection.status}.`,
     });
-  }, [inspection, action.type, progress.answeredItems, progress.totalItems, reloadLocal]);
+  }, [
+    inspection,
+    action.type,
+    isQrVerified,
+    progress.answeredItems,
+    progress.totalItems,
+    reloadLocal,
+    router,
+  ]);
 
   // EX-01: Tela de Permissão Negada
   if (isForbidden) {
@@ -379,6 +552,67 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
               </Text>
             </View>
           </View>
+
+          {isQrVerified && (
+            <View
+              testID="details-qr-verified-badge"
+              style={[
+                styles.verifiedPill,
+                verificationRecord?.mode === 'DIVERGENCE_OVERRIDE' ||
+                params.divergenceJustified === 'true'
+                  ? styles.verifiedPillWarning
+                  : styles.verifiedPillSuccess,
+              ]}
+            >
+              <MaterialIcons
+                name="verified"
+                size={16}
+                color={
+                  verificationRecord?.mode === 'DIVERGENCE_OVERRIDE' ||
+                  params.divergenceJustified === 'true'
+                    ? '#92400E'
+                    : '#166534'
+                }
+              />
+              <Text
+                style={[
+                  styles.verifiedPillText,
+                  verificationRecord?.mode === 'DIVERGENCE_OVERRIDE' ||
+                  params.divergenceJustified === 'true'
+                    ? styles.verifiedPillTextWarning
+                    : styles.verifiedPillTextSuccess,
+                ]}
+              >
+                {verificationRecord?.mode === 'DIVERGENCE_OVERRIDE' ||
+                params.divergenceJustified === 'true'
+                  ? 'Divergência justificada • equipamento liberado'
+                  : `Equipamento validado em campo${
+                      verificationRecord?.scannedCode || params.scannedCode
+                        ? ` (${verificationRecord?.scannedCode || params.scannedCode})`
+                        : ''
+                    }`}
+              </Text>
+            </View>
+          )}
+
+          {isEditableInspection && (
+            <Button
+              testID="details-scan-qr-button"
+              title={
+                isQrVerified
+                  ? 'Revalidar QR Code do Equipamento'
+                  : 'Validar Equipamento (QR Code)'
+              }
+              variant={isQrVerified ? 'secondary' : 'primary'}
+              onPress={() =>
+                router.push({
+                  pathname: '/(protected)/scanner',
+                  params: { inspectionId: inspection.id },
+                })
+              }
+              style={styles.scanQrButton}
+            />
+          )}
         </Card>
 
         {/* Localização e Endereço Completo (RF-05) */}
@@ -514,30 +748,60 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                 </Text>
                 {sectionItems.map((item) => {
                   const isAnswered = respondedItemIds.has(item.id);
+                  const currentResponse = responseByItemId.get(item.id);
                   return (
-                    <View key={item.id} style={styles.checklistItemRow}>
-                      <MaterialIcons
-                        name={
-                          isAnswered
-                            ? 'check-circle'
-                            : 'radio-button-unchecked'
-                        }
-                        size={16}
-                        color={
-                          isAnswered
-                            ? tokens.colors.success
-                            : tokens.colors.textMuted
-                        }
-                      />
-                      <View style={styles.checklistItemTextWrap}>
-                        <Text style={styles.checklistItemTitle}>
-                          {item.title}
-                          {Boolean(item.required) ? ' *' : ''}
-                        </Text>
-                        <Text style={styles.checklistItemMeta}>
-                          {formatResponseTypeLabel(item.response_type)}
-                        </Text>
+                    <View key={item.id} style={styles.checklistItemBlock}>
+                      <View style={styles.checklistItemRow}>
+                        <MaterialIcons
+                          name={
+                            isAnswered
+                              ? 'check-circle'
+                              : 'radio-button-unchecked'
+                          }
+                          size={16}
+                          color={
+                            isAnswered
+                              ? tokens.colors.success
+                              : tokens.colors.textMuted
+                          }
+                        />
+                        <View style={styles.checklistItemTextWrap}>
+                          <Text style={styles.checklistItemTitle}>
+                            {item.title}
+                            {Boolean(item.required) ? ' *' : ''}
+                          </Text>
+                          <Text style={styles.checklistItemMeta}>
+                            {formatResponseTypeLabel(item.response_type)}
+                          </Text>
+                        </View>
                       </View>
+
+                      {isChecklistInteractive && isEditableInspection && (
+                        <View style={styles.interactiveInputWrap}>
+                          <DynamicItemRenderer
+                            testID={`checklist-item-input-${item.id}`}
+                            item={item}
+                            value={parseStoredResponseValue(item, currentResponse?.value)}
+                            nonConformityDescription={
+                              currentResponse?.non_conformity_description ?? ''
+                            }
+                            onChange={(val) =>
+                              void handleSaveChecklistAnswer(
+                                item,
+                                val,
+                                currentResponse?.non_conformity_description ?? undefined
+                              )
+                            }
+                            onNonConformityDescriptionChange={(desc) =>
+                              void handleSaveChecklistAnswer(
+                                item,
+                                currentResponse?.value ?? 'NON_CONFORMING',
+                                desc
+                              )
+                            }
+                          />
+                        </View>
+                      )}
                     </View>
                   );
                 })}
@@ -889,6 +1153,46 @@ const styles = StyleSheet.create({
   checklistItemMeta: {
     fontSize: tokens.typography.fontSizes.small - 1,
     color: tokens.colors.textMuted,
+  },
+  checklistItemBlock: {
+    gap: tokens.spacing.xs,
+  },
+  interactiveInputWrap: {
+    paddingLeft: tokens.spacing.m,
+    paddingBottom: tokens.spacing.s,
+  },
+  verifiedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.xs,
+    borderRadius: tokens.borderRadius.small,
+    paddingVertical: 6,
+    paddingHorizontal: tokens.spacing.s,
+    marginTop: tokens.spacing.s,
+  },
+  verifiedPillSuccess: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  verifiedPillWarning: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  verifiedPillText: {
+    flex: 1,
+    fontSize: tokens.typography.fontSizes.small,
+    fontWeight: tokens.typography.fontWeights.medium,
+  },
+  verifiedPillTextSuccess: {
+    color: '#166534',
+  },
+  verifiedPillTextWarning: {
+    color: '#92400E',
+  },
+  scanQrButton: {
+    marginTop: tokens.spacing.s,
   },
   footerBar: {
     padding: tokens.spacing.m,

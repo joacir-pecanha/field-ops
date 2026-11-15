@@ -13,6 +13,7 @@ export default function ProtectedLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="inspections" />
+      <Stack.Screen name="scanner" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

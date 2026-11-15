@@ -35,7 +35,13 @@
         }
       ],
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir que o FieldOps acesse a câmera para leitura de QR Codes de equipamentos e registro de evidências."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

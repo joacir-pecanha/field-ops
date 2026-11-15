@@ -327,6 +327,13 @@ export default function HomeScreen(props: HomeScreenProps) {
         <Text style={styles.sectionTitle}>Ações Rápidas</Text>
         <View style={styles.actionsContainer}>
           <Button
+            testID="home-qr-scanner-button"
+            title="Identificar Equipamento (QR Code)"
+            onPress={() => router.push('/(protected)/scanner')}
+            variant="primary"
+            style={styles.actionButton}
+          />
+          <Button
             testID="home-sync-button"
             title={busySync ? 'Sincronizando...' : 'Sincronizar Dados'}
             onPress={handleQuickSync}

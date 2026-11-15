@@ -3,7 +3,7 @@
 ## 1. Metadados
 - **ID:** TASK-014
 - **Épico / Módulo:** Mobile / Leitura de QR Code
-- **Status:** APPROVED
+- **Status:** IN_REVIEW
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/aplicativo_mobile.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/aplicativo_mobile.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
@@ -50,23 +50,29 @@ Em inspeções técnicas industriais ou prediais, é frequente que o técnico en
 ---
 
 ## 5. Plano de Execução Passo a Passo
-- [ ] **Passo 1:** Implementar hook de permissão de câmera com tratamento de status negado / bloqueado.
-- [ ] **Passo 2:** Desenvolver a tela `scanner.tsx` com componente `CameraView` e máscara com mira central.
-- [ ] **Passo 3:** Implementar lógica de debounce e verificação no serviço `qrValidator.ts`.
-- [ ] **Passo 4:** Criar o modal `DivergenceModal.tsx` para apresentar alertas de divergência.
-- [ ] **Passo 5:** Criar formulário modal de fallback para digitação manual do código de patrimônio.
-- [ ] **Passo 6:** Escrever testes unitários para a regra de validação de correspondência e divergência.
+- [x] **Passo 1:** Implementar hook de permissão de câmera com tratamento de status negado / bloqueado.
+- [x] **Passo 2:** Desenvolver a tela `scanner.tsx` com componente `CameraView` e máscara com mira central.
+- [x] **Passo 3:** Implementar lógica de debounce e verificação no serviço `qrValidator.ts`.
+- [x] **Passo 4:** Criar o modal `DivergenceModal.tsx` para apresentar alertas de divergência.
+- [x] **Passo 5:** Criar formulário modal de fallback para digitação manual do código de patrimônio.
+- [x] **Passo 6:** Escrever testes unitários para a regra de validação de correspondência e divergência.
 
 ---
 
 ## 6. Critérios de Aceitação (Definition of Done)
-- [ ] **CA-01:** Ler o QR Code correto valida o equipamento e direciona para o início do checklist.
-- [ ] **CA-02:** Ler um QR Code divergente bloqueia o avanço imediato e exibe alerta com dados dos dois equipamentos.
-- [ ] **CA-03:** Se a permissão de câmera for negada, o técnico consegue prosseguir digitando o código manualmente.
-- [ ] **CA-04:** `npx tsc --noEmit` executa sem erros de tipagem.
+- [x] **CA-01:** Ler o QR Code correto valida o equipamento e direciona para o início do checklist.
+- [x] **CA-02:** Ler um QR Code divergente bloqueia o avanço imediato e exibe alerta com dados dos dois equipamentos.
+- [x] **CA-03:** Se a permissão de câmera for negada, o técnico consegue prosseguir digitando o código manualmente.
+- [x] **CA-04:** `npx tsc --noEmit` executa sem erros de tipagem.
 - [ ] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
 ## 7. Registro de Execução & Decisões Técnicas
-*(Preenchido durante o desenvolvimento)*
+- **Dependência:** Adicionada `expo-camera@~57.0.6` e plugin configurado em `mobile/app.json`, respeitando a versão compatível com Expo SDK 57.
+- **Permissão e Consentimento (`RF-01`, `RF-02`, `RN-058`, `RN-059`):** Criado `mobile/src/features/scanner/hooks/useCameraPermission.ts` com `resolveCameraPermissionState` e gate explícito de consentimento antes de acionar `CameraView`, além de orientação distinta para estados `denied` e `blocked` com fallback manual imediato.
+- **Validação 100% Offline & Debounce (`RF-03`, `RF-04`, `RF-06`, `RF-07`, `RT-03`, `EX-02`):** Implementados `QrScanSessionGuard`, `createQrScanDebounceController`, `validateScannedQrCode` e `confirmEquipmentVerification` em `mobile/src/features/scanner/services/qrValidator.ts`, consultando o SQLite local via `InspectionRepository`, garantindo escopo por técnico (`isInspectionAssignedToTechnician`), mensagem exata `"Código QR não identificado no FieldOps"` para códigos não reconhecidos e transição `EM_ANDAMENTO` + enfileiramento `START_INSPECTION` no Outbox.
+- **Componentes e Tela (`RT-01`, `RT-02`, `CA-01`, `CA-02`, `CA-03`, `EX-01`):** Implementados `CameraScannerOverlay.tsx` (irmão absoluto do `CameraView`, mira central, lanterna e botão de etiqueta danificada), `DivergenceModal.tsx` (comparativo esperado vs lido e justificativa técnica mínima de 10 caracteres), `ManualCodeModal.tsx` (fallback com seleção de motivo e confirmação explícita) e `mobile/src/app/(protected)/scanner.tsx` (registrado em `(protected)/_layout.tsx`, `router.d.ts`, integrado na Home `(tabs)/index.tsx` e nos Detalhes da Inspeção `[inspectionId]/index.tsx` com liberação interativa de checklist via `DynamicItemRenderer` persistido em SQLite).
+- **Verificações Executadas:**
+  - `node mobile\node_modules\typescript\bin\tsc -p mobile\tsconfig.json --noEmit` -> Exit code `0` (0 erros).
+  - `npm --prefix mobile test` -> Exit code `0` (`131` testes aprovados em `37` suítes, `0` falhas).
