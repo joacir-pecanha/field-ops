@@ -240,6 +240,14 @@ export async function refreshInspectionsFromRemote(
     if (Array.isArray(remoteList) && remoteList.length > 0) {
       const mapped = remoteList.map(mapRemoteInspectionToLocal).filter((item) => Boolean(item.id));
       await inspectionRepo.upsertMany(mapped);
+      if (typeof inspectionRepo.syncRemoteSnapshots === 'function') {
+        for (const remote of remoteList) {
+          const remoteId = String(remote?.id ?? remote?.remoteId ?? remote?.remote_id ?? '');
+          if (remoteId && Array.isArray(remote?.items) && remote.items.length > 0) {
+            await inspectionRepo.syncRemoteSnapshots(remoteId, remote.items);
+          }
+        }
+      }
     }
     const local = await loadInspectionsFromLocal(params);
     return {

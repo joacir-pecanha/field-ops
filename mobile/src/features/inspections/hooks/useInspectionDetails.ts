@@ -241,6 +241,13 @@ export async function loadInspectionDetails(
     }
 
     await inspectionRepo.upsertMany([mapped]);
+    if (
+      typeof inspectionRepo.syncRemoteSnapshots === 'function' &&
+      Array.isArray(remote.items) &&
+      remote.items.length > 0
+    ) {
+      await inspectionRepo.syncRemoteSnapshots(mapped.id, remote.items);
+    }
     const hydrated = await inspectionRepo.findByIdWithDetails(mapped.id, referenceDate);
     return hydrated ? buildSuccessResult(hydrated) : buildNotFoundResult();
   } catch (err: any) {
@@ -298,6 +305,13 @@ export async function refreshInspectionDetails(
         return buildForbiddenResult(onPermissionDenied);
       }
       await inspectionRepo.upsertMany([mapped]);
+      if (
+        typeof inspectionRepo.syncRemoteSnapshots === 'function' &&
+        Array.isArray(remote.items) &&
+        remote.items.length > 0
+      ) {
+        await inspectionRepo.syncRemoteSnapshots(mapped.id, remote.items);
+      }
     }
     const localAfter = await inspectionRepo.findByIdWithDetails(inspectionId, referenceDate);
     return localAfter ? buildSuccessResult(localAfter) : buildNotFoundResult();

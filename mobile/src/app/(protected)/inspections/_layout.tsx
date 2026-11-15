@@ -9,7 +9,7 @@ export default function InspectionsStackLayout() {
       headerTitleStyle: { fontWeight: 'bold' }
     }}>
       <Stack.Screen 
-        name="[id]/index" 
+        name="[inspectionId]/index" 
         options={{ title: 'Detalhes da Inspeção' }} 
       />
     </Stack>

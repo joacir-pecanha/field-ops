@@ -331,6 +331,79 @@ describe('InspectionRepository Queries, Hooks List & Details (TASK-013 Passos 1 
       assert.equal(insp2?.status, 'EM_ANDAMENTO');
       assert.equal(insp2?.client_name, 'Comercial Beta');
     });
+
+    test('syncRemoteSnapshots persiste seções/itens do backend e normaliza PHOTO para CHECK constraint v1', async () => {
+      const result = await refreshInspectionsFromRemote({
+        technicianId: 'tech-1',
+        inspectionRepository: inspectionRepo,
+        outboxRepository: outboxRepo,
+        networkMonitor,
+        referenceDate: REF_DATE,
+        fetchRemoteAssigned: async () => [
+          {
+            id: 'rem-snap-1',
+            templateId: 'tmpl-ger',
+            clientName: 'Indústria Alfa',
+            siteName: 'Planta Sorocaba',
+            siteAddress: 'Av. Industrial, 1200',
+            equipmentName: 'Gerador Diesel GD-001',
+            equipmentCode: 'EQP-GD-001',
+            equipmentQrCode: 'QR-FIELDOPS-GD001',
+            status: 'ATRIBUÍDA',
+            priority: 'ALTA',
+            scheduledFor: '2026-11-20T09:00:00.000Z',
+            technicianId: 'tech-1',
+            items: [
+              {
+                id: 'snap-item-1',
+                sectionTitle: 'Inspeção Visual',
+                sectionOrder: 0,
+                itemTitle: 'Integridade da carenagem',
+                responseType: 'CONFORMITY',
+                required: true,
+                itemOrder: 0,
+              },
+              {
+                id: 'snap-item-2',
+                sectionTitle: 'Inspeção Visual',
+                sectionOrder: 0,
+                itemTitle: 'Modo de operação',
+                responseType: 'SINGLE_CHOICE',
+                options: ['Automático', 'Manual'],
+                required: true,
+                itemOrder: 1,
+              },
+              {
+                id: 'snap-item-3',
+                sectionTitle: 'Evidências',
+                sectionOrder: 1,
+                itemTitle: 'Foto do painel frontal',
+                responseType: 'PHOTO',
+                required: true,
+                itemOrder: 0,
+              },
+            ],
+          },
+        ],
+      });
+
+      assert.equal(result.refreshedFromNetwork, true);
+
+      const details = await inspectionRepo.findByIdWithDetails('rem-snap-1', REF_DATE);
+      assert.ok(details);
+      assert.equal(details.sections.length, 2);
+      assert.equal(details.sections[0].title, 'Inspeção Visual');
+      assert.equal(details.sections[1].title, 'Evidências');
+      assert.equal(details.items.length, 3);
+      assert.equal(details.progress.totalItems, 3);
+      assert.equal(details.progress.requiredItems, 3);
+
+      const choiceItem = details.items.find((i) => i.id === 'snap-item-2');
+      assert.equal(choiceItem?.options_json, '["Automático","Manual"]');
+
+      const photoNormalized = details.items.find((i) => i.id === 'snap-item-3');
+      assert.equal(photoNormalized?.response_type, 'TEXT_SHORT');
+    });
   });
 
   describe('Passo 2: Hook useInspectionList (Consulta Local e Refresh Resiliente)', () => {

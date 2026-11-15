@@ -27,9 +27,11 @@ O técnico em campo precisa de uma interface ágil e clara para visualizar sua c
 - `mobile/__tests__/features/inspections/InspectionCard.test.tsx` (Testes unitários de renderização do card e badges)
 - `mobile/__tests__/features/inspections/inspections.test.ts` (Testes de repositório SQLite e lógica dos hooks)
 - `mobile/__tests__/mocks/expo-vector-icons.mjs` e `mobile/__tests__/ts-loader.mjs` (Suporte a renderização de ícones e resolução ESM nos testes)
-- `mobile/src/app/(protected)/(tabs)/index.tsx` *(Passo 4 — pendente)*
-- `mobile/src/app/(protected)/(tabs)/inspections.tsx` *(Passo 5 — pendente)*
-- `mobile/src/app/(protected)/inspections/[inspectionId]/index.tsx` *(Passo 6 — pendente)*
+- `mobile/src/app/(protected)/(tabs)/index.tsx` (Painel operacional do técnico com contadores em tempo real e sincronização rápida)
+- `mobile/src/app/(protected)/(tabs)/inspections.tsx` (Lista de inspeções com busca textual, abas de estado, chips e pull-to-refresh offline-first)
+- `mobile/src/app/(protected)/inspections/[inspectionId]/index.tsx` (Detalhes offline com equipamento/QR, endereço, progresso, guarda de permissão e botão dinâmico)
+- `mobile/src/app/(protected)/inspections/_layout.tsx` (Registro da rota dinâmica `[inspectionId]/index`)
+- `mobile/src/infrastructure/sync/networkMonitor.ts` e `mobile/metro.config.js` (Suporte de health-check `/actuator/health` e cabeçalhos WASM para validação Web)
 
 ---
 
@@ -58,9 +60,9 @@ O técnico em campo precisa de uma interface ágil e clara para visualizar sua c
 - [x] **Passo 1:** Criar consultas tipadas em `inspectionRepository.ts` para listagem com filtros e busca por ID.
 - [x] **Passo 2:** Desenvolver hooks reativos `useInspectionList` e `useInspectionDetails` integrados ao SQLite.
 - [x] **Passo 3:** Implementar o componente reutilizável `InspectionCard` com badges de prioridade e status.
-- [ ] **Passo 4:** Criar a tela `(tabs)/index.tsx` com contadores de hoje, atrasadas e botão rápido de sincronizar.
-- [ ] **Passo 5:** Criar a tela de lista `(tabs)/inspections.tsx` com tabs e busca.
-- [ ] **Passo 6:** Criar a tela de detalhes `[inspectionId]/index.tsx`.
+- [x] **Passo 4:** Criar a tela `(tabs)/index.tsx` com contadores de hoje, atrasadas e botão rápido de sincronizar.
+- [x] **Passo 5:** Criar a tela de lista `(tabs)/inspections.tsx` com tabs e busca.
+- [x] **Passo 6:** Criar a tela de detalhes `[inspectionId]/index.tsx`.
 - [ ] **Passo 7:** Escrever testes de renderização com Jest e React Native Testing Library.
 
 ---
@@ -87,3 +89,17 @@ O técnico em campo precisa de uma interface ágil e clara para visualizar sua c
   - **Evidências de Verificação:**
     - `npx --prefix mobile tsc -p mobile/tsconfig.json --noEmit`: aprovado (código de saída 0, zero erros).
     - `npm --prefix mobile test`: **104/104 testes aprovados** (29 suítes, 0 falhas), incluindo 19 novos testes dedicados em `InspectionCard.test.tsx` (6) e `inspections.test.ts` (13) executados sobre SQLite real em memória (`node:sqlite`) e `renderToStaticMarkup`.
+- **2026-11-14 (Checkpoint Passos 4 a 6 — Aguardando Validação Humana para Passo 7):**
+  - **Snapshots & Rota `[inspectionId]`:**
+    - Adicionado `syncRemoteSnapshots` em `inspectionRepository.ts` e integrado a `refreshInspectionsFromRemote`, `loadInspectionDetails` e `refreshInspectionDetails`, persistindo seções/itens do backend com normalização de `response_type` (ex.: `PHOTO` -> `TEXT_SHORT`) sem alterar `migrations.ts`.
+    - Renomeada a rota dinâmica de `inspections/[id]` para `inspections/[inspectionId]` e atualizado `inspections/_layout.tsx` e `.expo/types/router.d.ts`.
+    - Ajustados `networkMonitor.ts` (`/actuator/health`) e `metro.config.js` (headers COOP/COEP) para operação fluida também via Expo Web.
+  - **Passo 4 (`(tabs)/index.tsx`):**
+    - Painel inicial com saudação personalizada ao usuário autenticado, indicador Online/Offline, grade 2x2 de contadores clicáveis (`Para hoje`, `Atrasadas`, `Em andamento`, `Pendentes de envio`), botão rápido `Sincronizar Dados` (Outbox + pull remoto), preview de até 3 `InspectionCard` prioritários, pull-to-refresh e snackbar discreto em falhas de rede.
+  - **Passo 5 (`(tabs)/inspections.tsx`):**
+    - Listagem virtualizada (`FlatList`) sobre SQLite com `InspectionCard`, busca textual local com limpar, abas `Todas`, `Pendentes`, `Em andamento` e `Concluídas` com contadores, chips `Atrasadas` / `Para hoje`, estado vazio amigável (`"Nenhuma inspeção atribuída no momento"`) e snackbar discreto preservando dados em falhas offline.
+  - **Passo 6 (`inspections/[inspectionId]/index.tsx`):**
+    - Detalhes completos 100% offline com equipamento, código, QR Code previsto, unidade, endereço completo, prazos, instruções, progresso e preview de seções/itens; tratamento de permissão negada (`EX-01`) retornando à lista; e botão de ação dinâmico (`"Iniciar Inspeção"` -> transição local para `EM_ANDAMENTO` / `"Continuar Checklist"` -> `"Consultar"`).
+  - **Evidências de Verificação:**
+    - `npx --prefix mobile tsc -p mobile/tsconfig.json --noEmit`: aprovado (código de saída 0, zero erros).
+    - `npm --prefix mobile test`: **105/105 testes aprovados** (29 suítes, 0 falhas), incluindo teste de persistência e normalização de snapshots em `syncRemoteSnapshots`.

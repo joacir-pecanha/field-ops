@@ -848,6 +848,136 @@ export class InspectionRepository {
   }
 
   /**
+   * Persiste ou atualiza no SQLite as seções e itens do snapshot recebidos da API (RT-03).
+   * Preserva respostas locais existentes usando ON CONFLICT(id) DO UPDATE e normaliza
+   * response_type para respeitar a constraint CHECK do schema v1 sem alterar migrations.ts.
+   */
+  async syncRemoteSnapshots(inspectionId: string, remoteItems?: any[]): Promise<void> {
+    if (!inspectionId || !Array.isArray(remoteItems) || remoteItems.length === 0) {
+      return;
+    }
+
+    const db = await this.getDb();
+    const existingInspection =
+      (await this.findById(inspectionId)) ?? (await this.findByRemoteId(inspectionId));
+    if (!existingInspection) {
+      return;
+    }
+    const resolvedInspectionId = existingInspection.id;
+
+    const existingItemsCountRow = await db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM checklist_items WHERE inspection_id = ?;',
+      [resolvedInspectionId]
+    );
+    const hasExistingItems = (existingItemsCountRow?.count ?? 0) > 0;
+    const hasPendingSync =
+      existingInspection.sync_status !== undefined &&
+      existingInspection.sync_status !== 'SINCRONIZADO';
+
+    if (hasExistingItems && hasPendingSync) {
+      return;
+    }
+
+    const ALLOWED_RESPONSE_TYPES = new Set([
+      'TEXT_SHORT',
+      'TEXT_LONG',
+      'NUMBER',
+      'BOOLEAN',
+      'CONFORMITY',
+      'SINGLE_CHOICE',
+      'DATE',
+    ]);
+
+    const sectionMap = new Map<
+      string,
+      { id: string; title: string; orderIndex: number }
+    >();
+
+    for (let index = 0; index < remoteItems.length; index++) {
+      const raw = remoteItems[index];
+      if (!raw) {
+        continue;
+      }
+
+      const sectionTitle = String(raw.sectionTitle ?? raw.section_title ?? 'Checklist').trim() || 'Checklist';
+      const sectionOrder = Number(raw.sectionOrder ?? raw.section_order ?? 0) || 0;
+      const sectionKey = `${sectionOrder}::${sectionTitle}`;
+
+      let sectionEntry = sectionMap.get(sectionKey);
+      if (!sectionEntry) {
+        const slug = sectionTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 32) || 'geral';
+        const sectionId = `sec_${resolvedInspectionId}_${sectionOrder}_${slug}`;
+        sectionEntry = { id: sectionId, title: sectionTitle, orderIndex: sectionOrder };
+        sectionMap.set(sectionKey, sectionEntry);
+
+        await db.runAsync(
+          `INSERT INTO checklist_sections (id, inspection_id, title, order_index)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             title = excluded.title,
+             order_index = excluded.order_index;`,
+          [sectionEntry.id, resolvedInspectionId, sectionEntry.title, sectionEntry.orderIndex]
+        );
+      }
+
+      const itemId = String(raw.id ?? `item_${resolvedInspectionId}_${index}`).trim();
+      if (!itemId) {
+        continue;
+      }
+
+      const itemTitle = String(raw.itemTitle ?? raw.title ?? `Item ${index + 1}`).trim();
+      const itemDescription = raw.itemDescription ?? raw.description ?? null;
+      const rawResponseType = String(raw.responseType ?? raw.response_type ?? 'TEXT_SHORT')
+        .trim()
+        .toUpperCase();
+      const responseType = ALLOWED_RESPONSE_TYPES.has(rawResponseType)
+        ? rawResponseType
+        : 'TEXT_SHORT';
+
+      let optionsJson: string | null = null;
+      if (typeof raw.optionsJson === 'string' && raw.optionsJson.trim().length > 0) {
+        optionsJson = raw.optionsJson;
+      } else if (typeof raw.options_json === 'string' && raw.options_json.trim().length > 0) {
+        optionsJson = raw.options_json;
+      } else if (Array.isArray(raw.options) && raw.options.length > 0) {
+        optionsJson = JSON.stringify(raw.options);
+      }
+
+      const requiredVal = raw.required === false || raw.required === 0 ? 0 : 1;
+      const orderIndex = Number(raw.itemOrder ?? raw.order_index ?? index) || 0;
+
+      await db.runAsync(
+        `INSERT INTO checklist_items (
+          id, section_id, inspection_id, title, description, response_type, options_json, required, order_index
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          section_id = excluded.section_id,
+          title = excluded.title,
+          description = excluded.description,
+          response_type = excluded.response_type,
+          options_json = excluded.options_json,
+          required = excluded.required,
+          order_index = excluded.order_index;`,
+        [
+          itemId,
+          sectionEntry.id,
+          resolvedInspectionId,
+          itemTitle,
+          itemDescription,
+          responseType,
+          optionsJson,
+          requiredVal,
+          orderIndex,
+        ]
+      );
+    }
+  }
+
+  /**
    * Atualiza campos de uma inspeção existente.
    */
   async update(

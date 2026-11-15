@@ -1,6 +1,11 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { AuthStorage, AUTH_STORAGE_KEYS, type ISecureStorage } from '../../src/features/auth/services/authStorage';
+import {
+  AuthStorage,
+  AUTH_STORAGE_KEYS,
+  createDefaultSecureStorage,
+  type ISecureStorage,
+} from '../../src/features/auth/services/authStorage';
 import type { AuthUser, AuthTokens } from '../../src/features/auth/types';
 
 class MockSecureStorage implements ISecureStorage {
@@ -123,6 +128,38 @@ describe('AuthStorage (RT-01, RT-02, RN-007, AC-AUTH)', () => {
     assert.equal(await authStorage.getAccessToken(), null);
     assert.equal(await authStorage.getRefreshToken(), null);
     assert.equal(await authStorage.getUser(), null);
+    assert.deepEqual(mockStore.dump(), {});
+  });
+
+  test('createDefaultSecureStorage: deve recorrer ao fallback quando o módulo nativo lançar setValueWithKeyAsync is not a function no Web', async () => {
+    const webUnavailableStore: ISecureStorage = {
+      async getItemAsync() {
+        throw new TypeError('ExpoSecureStore.default.getValueWithKeyAsync is not a function');
+      },
+      async setItemAsync() {
+        throw new TypeError('ExpoSecureStore.default.setValueWithKeyAsync is not a function');
+      },
+      async deleteItemAsync() {
+        throw new TypeError('ExpoSecureStore.default.deleteValueWithKeyAsync is not a function');
+      },
+    };
+
+    const resilientStorage = createDefaultSecureStorage(webUnavailableStore, mockStore);
+    const resilientAuthStorage = new AuthStorage(resilientStorage);
+
+    await resilientAuthStorage.saveSession({
+      tokens: mockTokens,
+      user: mockUser,
+    });
+
+    const session = await resilientAuthStorage.getSession();
+    assert.ok(session);
+    assert.equal(session.tokens.accessToken, mockTokens.accessToken);
+    assert.equal(session.tokens.refreshToken, mockTokens.refreshToken);
+    assert.deepEqual(session.user, mockUser);
+
+    await resilientAuthStorage.clearSession();
+    assert.equal(await resilientAuthStorage.getSession(), null);
     assert.deepEqual(mockStore.dump(), {});
   });
 });
