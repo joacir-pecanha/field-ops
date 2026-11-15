@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-014
 - **Épico / Módulo:** Mobile / Leitura de QR Code
-- **Status:** IN_REVIEW
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/aplicativo_mobile.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/aplicativo_mobile.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusã:** 2026-11-15
 
 ---
 
@@ -64,7 +64,7 @@ Em inspeções técnicas industriais ou prediais, é frequente que o técnico en
 - [x] **CA-02:** Ler um QR Code divergente bloqueia o avanço imediato e exibe alerta com dados dos dois equipamentos.
 - [x] **CA-03:** Se a permissão de câmera for negada, o técnico consegue prosseguir digitando o código manualmente.
 - [x] **CA-04:** `npx tsc --noEmit` executa sem erros de tipagem.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
