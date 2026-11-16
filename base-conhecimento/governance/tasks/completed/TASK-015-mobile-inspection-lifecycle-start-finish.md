@@ -8,7 +8,7 @@
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md), [docs/fluxo_geral.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/fluxo_geral.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-15
 
 ---
 
@@ -65,7 +65,7 @@ A transição de estados de uma inspeção em campo requer garantia de rastreabi
 - [x] **CA-02:** Tentar concluir com item obrigatório não preenchido bloqueia a ação e indica os itens pendentes.
 - [x] **CA-03:** Concluir inspeção 100% preenchida bloqueia os inputs de resposta e enfileira a operação de encerramento.
 - [x] **CA-04:** Coordenadas GPS são gravadas no SQLite quando a permissão for concedida.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
