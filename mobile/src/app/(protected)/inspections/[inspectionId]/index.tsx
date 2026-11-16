@@ -14,25 +14,36 @@ import { Button } from '@/design-system/components/Button';
 import { Card } from '@/design-system/components/Card';
 import { StatusBadge, type InspectionStatus } from '@/design-system/components/StatusBadge';
 import { tokens } from '@/design-system/tokens';
+import { useAuth } from '@/features/auth/context/AuthContext';
 import {
+  AWAITING_SYNC_LABEL,
   INSPECTION_NOT_FOUND_MESSAGE,
+  InspectionLifecycleError,
   PERMISSION_DENIED_MESSAGE,
+  PendingItemsModal,
   PriorityBadge,
   SyncStatusBadge,
-  type UseInspectionDetailsOptions,
+  getInspectionLocations,
+  isInspectionReadOnly,
+  saveChecklistResponse,
+  startInspection,
   useInspectionDetails,
+  useInspectionProgress,
+  type InspectionLocationsResult,
+  type PendingInspectionItem,
+  type UseInspectionDetailsOptions,
 } from '@/features/inspections';
 import { DynamicItemRenderer } from '@/features/checklist';
+import {
+  OsmLeafletMap,
+  formatCoordinatesSummary,
+} from '@/features/location/services/locationService';
 import { getEquipmentVerificationRecord } from '@/features/scanner/services/qrValidator';
-import { getDatabase } from '@/infrastructure/database/db';
-import { inspectionRepository } from '@/infrastructure/database/repositories/inspectionRepository';
-import { outboxRepository } from '@/infrastructure/database/repositories/outboxRepository';
 import {
   type ChecklistItem,
   type ChecklistResponse,
   type ChecklistSection,
 } from '@/infrastructure/database/types';
-import { generateUUID } from '@/infrastructure/sync/uuid';
 
 export interface InspectionDetailsScreenProps {
   inspectionId?: string;
@@ -90,31 +101,16 @@ function parseStoredResponseValue(
   return rawValue;
 }
 
-function serializeChecklistValue(nextValue: unknown): string {
-  if (nextValue === null || nextValue === undefined) {
-    return '';
-  }
-  if (typeof nextValue === 'string') {
-    return nextValue;
-  }
-  if (typeof nextValue === 'boolean' || typeof nextValue === 'number') {
-    return String(nextValue);
-  }
-  try {
-    return JSON.stringify(nextValue);
-  } catch {
-    return String(nextValue);
-  }
-}
-
 export default function InspectionDetailsScreen(props: InspectionDetailsScreenProps) {
   const { inspectionId: propInspectionId, detailsOptions } = props ?? {};
   const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{
     inspectionId?: string;
     id?: string;
     qrVerified?: string;
     openChecklist?: string;
+    focusItemId?: string;
     scannedCode?: string;
     divergenceJustified?: string;
   }>();
@@ -128,9 +124,9 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     sections,
     items,
     responses,
+    evidences,
     equipment,
     site,
-    progress,
     isOverdue,
     isPendingSync,
     action,
@@ -145,17 +141,63 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     refresh,
   } = useInspectionDetails(resolvedId, detailsOptions);
 
+  const progress = useInspectionProgress({
+    items,
+    responses,
+    sections,
+    evidences,
+  });
+
   const [isUpdatingAction, setIsUpdatingAction] = useState(false);
   const [isChecklistInteractive, setIsChecklistInteractive] = useState(
-    Boolean(params.openChecklist === 'true' || params.qrVerified === 'true')
+    Boolean(
+      params.openChecklist === 'true' ||
+        params.qrVerified === 'true' ||
+        params.focusItemId
+    )
   );
+  const [focusedItemId, setFocusedItemId] = useState<string | null>(
+    params.focusItemId ?? null
+  );
+  const [pendingModalVisible, setPendingModalVisible] = useState(false);
+  const [locations, setLocations] = useState<InspectionLocationsResult>({
+    startLocation: null,
+    completeLocation: null,
+    records: [],
+  });
   const [actionFeedback, setActionFeedback] = useState<{
-    type: 'success' | 'info';
+    type: 'success' | 'info' | 'warning';
     text: string;
   } | null>(null);
   const isFirstFocusRef = useRef(true);
+  const autoStartLocationRef = useRef(false);
+
+  const loadLocations = useCallback(async () => {
+    if (!resolvedId || detailsOptions?.initialData) {
+      return;
+    }
+    try {
+      const result = await getInspectionLocations(resolvedId);
+      setLocations(result);
+    } catch {
+      // Silencioso em fallback SSR/web
+    }
+  }, [resolvedId, detailsOptions?.initialData]);
 
   useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
+
+  useEffect(() => {
+    if (params.focusItemId) {
+      setIsChecklistInteractive(true);
+      setFocusedItemId(params.focusItemId);
+      setActionFeedback({
+        type: 'warning',
+        text: 'Preencha o item obrigatório destacado abaixo para liberar a conclusão da inspeção.',
+      });
+      return;
+    }
     if (params.openChecklist === 'true' || params.qrVerified === 'true') {
       setIsChecklistInteractive(true);
       setActionFeedback({
@@ -163,10 +205,17 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
         text:
           params.divergenceJustified === 'true'
             ? 'Divergência registrada com justificativa. Checklist liberado para preenchimento offline.'
-            : 'Equipamento validado via QR Code! Preencha os itens do checklist abaixo.',
+            : params.qrVerified === 'true'
+            ? 'Equipamento validado via QR Code! Preencha os itens do checklist abaixo.'
+            : 'Checklist liberado para preenchimento offline.',
       });
     }
-  }, [params.openChecklist, params.qrVerified, params.divergenceJustified]);
+  }, [
+    params.openChecklist,
+    params.qrVerified,
+    params.divergenceJustified,
+    params.focusItemId,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -175,8 +224,53 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
         return;
       }
       reloadLocal();
-    }, [reloadLocal])
+      void loadLocations();
+    }, [reloadLocal, loadLocations])
   );
+
+  // Captura GPS pontual de início automaticamente ao retornar do scanner com QR validado (RF-02, CA-04)
+  useEffect(() => {
+    if (
+      params.qrVerified !== 'true' ||
+      !inspection?.id ||
+      detailsOptions?.initialData ||
+      isInspectionReadOnly(inspection.status) ||
+      autoStartLocationRef.current
+    ) {
+      return;
+    }
+    autoStartLocationRef.current = true;
+
+    const ensureStartLocation = async () => {
+      try {
+        const currentLocs = await getInspectionLocations(inspection.id);
+        if (!currentLocs.startLocation) {
+          await startInspection({
+            inspectionId: inspection.id,
+            technicianId: user?.id ?? null,
+            userRole: user?.role ?? null,
+          });
+          await reloadLocal();
+          await loadLocations();
+        } else {
+          setLocations(currentLocs);
+        }
+      } catch {
+        // EX-01: Nunca trava a tela caso GPS esteja indisponível
+      }
+    };
+
+    void ensureStartLocation();
+  }, [
+    params.qrVerified,
+    inspection?.id,
+    inspection?.status,
+    detailsOptions?.initialData,
+    user?.id,
+    user?.role,
+    reloadLocal,
+    loadLocations,
+  ]);
 
   // EX-01: Redireciona de volta para a lista quando tentativa de acesso não autorizado é detectada
   useEffect(() => {
@@ -189,15 +283,7 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     return () => clearTimeout(timer);
   }, [isForbidden, router]);
 
-  const respondedItemIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const r of responses) {
-      if (r.value !== undefined && r.value !== null && String(r.value).trim() !== '') {
-        ids.add(r.item_id);
-      }
-    }
-    return ids;
-  }, [responses]);
+  const respondedItemIds = progress.answeredItemIds;
 
   const responseByItemId = useMemo(() => {
     const map = new Map<string, ChecklistResponse>();
@@ -211,7 +297,11 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     ? getEquipmentVerificationRecord(inspection.id)
     : null;
   const isQrVerified = Boolean(verificationRecord) || params.qrVerified === 'true';
-  const isEditableInspection = action.type === 'START' || action.type === 'CONTINUE';
+  const isReadOnlyInspection = Boolean(
+    inspection && (isInspectionReadOnly(inspection.status) || action.isReadOnly)
+  );
+  const isEditableInspection =
+    !isReadOnlyInspection && (action.type === 'START' || action.type === 'CONTINUE');
 
   const handleSaveChecklistAnswer = useCallback(
     async (
@@ -220,74 +310,49 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       nonConformityDescription?: string
     ) => {
       if (!inspection) return;
-      const serialized = serializeChecklistValue(nextValue);
-      const isNonConformity =
-        item.response_type === 'CONFORMITY' && serialized === 'NON_CONFORMING' ? 1 : 0;
-      const respondedAt = new Date().toISOString();
-      const existing = responseByItemId.get(item.id);
-      const responseId = existing?.id ?? generateUUID();
-      const finalNcDescription =
-        isNonConformity === 1
-          ? nonConformityDescription ?? existing?.non_conformity_description ?? null
-          : null;
+      if (isReadOnlyInspection) {
+        setActionFeedback({
+          type: 'warning',
+          text: 'Edição bloqueada: inspeção já concluída em modo somente leitura.',
+        });
+        return;
+      }
 
       try {
-        const db = await getDatabase();
-        await db.runAsync(
-          `INSERT INTO checklist_responses (
-            id, item_id, inspection_id, value, is_non_conformity, non_conformity_description, responded_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(item_id) DO UPDATE SET
-            value = excluded.value,
-            is_non_conformity = excluded.is_non_conformity,
-            non_conformity_description = excluded.non_conformity_description,
-            responded_at = excluded.responded_at;`,
-          [
-            responseId,
-            item.id,
-            inspection.id,
-            serialized,
-            isNonConformity,
-            finalNcDescription,
-            respondedAt,
-          ]
-        );
-
-        await inspectionRepository.update(inspection.id, {
-          status:
-            inspection.status === 'ATRIBUÍDA' || inspection.status === 'RASCUNHO'
-              ? 'EM_ANDAMENTO'
-              : inspection.status,
-          started_at: inspection.started_at ?? respondedAt,
-          sync_status: 'PENDENTE',
+        await saveChecklistResponse({
+          inspectionId: inspection.id,
+          item,
+          value: nextValue,
+          nonConformityDescription,
+          technicianId: user?.id ?? null,
+          userRole: user?.role ?? null,
         });
 
-        await outboxRepository.create({
-          id: generateUUID(),
-          entity_type: 'CHECKLIST_RESPONSE',
-          global_id: responseId,
-          operation_type: 'SUBMIT_RESPONSE',
-          payload: JSON.stringify({
-            id: responseId,
-            inspectionId: inspection.id,
-            itemId: item.id,
-            value: serialized,
-            isNonConformity: isNonConformity === 1,
-            nonConformityDescription: finalNcDescription,
-            respondedAt,
-          }),
-          status: 'PENDING',
-        });
+        if (
+          focusedItemId === item.id &&
+          nextValue !== undefined &&
+          nextValue !== null &&
+          String(nextValue).trim() !== ''
+        ) {
+          setFocusedItemId(null);
+        }
 
         await reloadLocal();
-      } catch {
+      } catch (err: any) {
+        if (err instanceof InspectionLifecycleError && err.code === 'READ_ONLY_INSPECTION') {
+          setActionFeedback({
+            type: 'warning',
+            text: err.message,
+          });
+          return;
+        }
         setActionFeedback({
           type: 'info',
           text: 'Não foi possível salvar a resposta no SQLite local neste momento.',
         });
       }
     },
-    [inspection, responseByItemId, reloadLocal]
+    [inspection, isReadOnlyInspection, user?.id, user?.role, focusedItemId, reloadLocal]
   );
 
   const groupedSections = useMemo(() => {
@@ -318,11 +383,29 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     }));
   }, [sections, items, inspection?.id]);
 
+  const handleOpenSummary = useCallback(() => {
+    if (!inspection) return;
+    router.push({
+      pathname: '/(protected)/inspections/[inspectionId]/summary',
+      params: { inspectionId: inspection.id },
+    });
+  }, [inspection, router]);
+
+  const handleSelectPendingItem = useCallback((pendingItem: PendingInspectionItem) => {
+    setPendingModalVisible(false);
+    setIsChecklistInteractive(true);
+    setFocusedItemId(pendingItem.itemId);
+    setActionFeedback({
+      type: 'warning',
+      text: `Item pendente selecionado: ${pendingItem.title}. Preencha o campo destacado abaixo.`,
+    });
+  }, []);
+
   const handlePrimaryAction = useCallback(async () => {
     if (!inspection) return;
 
     if (action.type === 'START') {
-      if (!isQrVerified) {
+      if (inspection.equipment_qr_code && !isQrVerified) {
         router.push({
           pathname: '/(protected)/scanner',
           params: { inspectionId: inspection.id },
@@ -333,16 +416,26 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       setIsUpdatingAction(true);
       setActionFeedback(null);
       try {
-        await inspectionRepository.update(inspection.id, {
-          status: 'EM_ANDAMENTO',
-          started_at: inspection.started_at ?? new Date().toISOString(),
-          sync_status: 'PENDENTE',
+        const result = await startInspection({
+          inspectionId: inspection.id,
+          technicianId: user?.id ?? null,
+          userRole: user?.role ?? null,
         });
+
+        if (!result.success) {
+          setActionFeedback({
+            type: 'warning',
+            text: result.message,
+          });
+          return;
+        }
+
         await reloadLocal();
+        await loadLocations();
         setIsChecklistInteractive(true);
         setActionFeedback({
           type: 'success',
-          text: 'Inspeção iniciada no dispositivo (EM_ANDAMENTO). Você já pode responder ao checklist abaixo.',
+          text: `${result.message} Você já pode responder ao checklist abaixo.`,
         });
       } finally {
         setIsUpdatingAction(false);
@@ -354,22 +447,23 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       setIsChecklistInteractive(true);
       setActionFeedback({
         type: 'info',
-        text: `Checklist interativo ativo (${progress.answeredItems}/${progress.totalItems} itens respondidos). As respostas são salvas offline automaticamente.`,
+        text: `Checklist interativo ativo (${progress.answeredItems}/${progress.applicableItems} itens respondidos). As respostas são salvas offline automaticamente.`,
       });
       return;
     }
 
-    setActionFeedback({
-      type: 'info',
-      text: `Modo consulta (somente leitura) para inspeção no estado ${inspection.status}.`,
-    });
+    handleOpenSummary();
   }, [
     inspection,
     action.type,
     isQrVerified,
+    user?.id,
+    user?.role,
     progress.answeredItems,
-    progress.totalItems,
+    progress.applicableItems,
     reloadLocal,
+    loadLocations,
+    handleOpenSummary,
     router,
   ]);
 
@@ -443,6 +537,16 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       ? inspection.sync_status
       : 'PENDENTE'
     : null;
+  const isAwaitingSync = Boolean(
+    isReadOnlyInspection &&
+      (isPendingSync || (inspection.sync_status && inspection.sync_status !== 'SINCRONIZADO'))
+  );
+  const activeMapLocation =
+    locations.completeLocation?.available
+      ? locations.completeLocation
+      : locations.startLocation?.available
+      ? locations.startLocation
+      : null;
 
   return (
     <View style={styles.root}>
@@ -458,6 +562,33 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
           />
         }
       >
+        {/* Banner de estado somente leitura / Aguardando Sincronização (EX-02, CA-03) */}
+        {isReadOnlyInspection && (
+          <View
+            testID="details-awaiting-sync-banner"
+            style={[
+              styles.readOnlyBanner,
+              isAwaitingSync ? styles.readOnlyBannerPending : styles.readOnlyBannerSynced,
+            ]}
+          >
+            <MaterialIcons
+              name={isAwaitingSync ? 'cloud-queue' : 'lock'}
+              size={18}
+              color={isAwaitingSync ? '#92400E' : '#166534'}
+            />
+            <Text
+              style={[
+                styles.readOnlyBannerText,
+                { color: isAwaitingSync ? '#92400E' : '#166534' },
+              ]}
+            >
+              {isAwaitingSync
+                ? `${AWAITING_SYNC_LABEL} • Checklist em modo somente leitura`
+                : 'Inspeção concluída • Checklist em modo somente leitura'}
+            </Text>
+          </View>
+        )}
+
         {/* Faixas de alerta de atraso ou motivo de reprovação/cancelamento */}
         {isOverdue && (
           <View testID="details-overdue-banner" style={styles.overdueBanner}>
@@ -485,15 +616,25 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
               styles.feedbackBanner,
               actionFeedback.type === 'success'
                 ? styles.feedbackSuccess
+                : actionFeedback.type === 'warning'
+                ? styles.feedbackWarning
                 : styles.feedbackInfo,
             ]}
           >
             <MaterialIcons
-              name={actionFeedback.type === 'success' ? 'check-circle' : 'info-outline'}
+              name={
+                actionFeedback.type === 'success'
+                  ? 'check-circle'
+                  : actionFeedback.type === 'warning'
+                  ? 'warning'
+                  : 'info-outline'
+              }
               size={18}
               color={
                 actionFeedback.type === 'success'
                   ? tokens.colors.success
+                  : actionFeedback.type === 'warning'
+                  ? '#B45309'
                   : tokens.colors.primary
               }
             />
@@ -635,6 +776,53 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
               {site?.address || site?.fullAddress || 'Endereço não cadastrado'}
             </Text>
           </View>
+
+          {(locations.startLocation || locations.completeLocation) && (
+            <View testID="details-gps-box" style={styles.gpsBox}>
+              <Text style={styles.gpsBoxTitle}>Coordenadas GPS Registradas</Text>
+              {locations.startLocation && (
+                <Text style={styles.gpsCoordLine}>
+                  Início:{' '}
+                  {locations.startLocation.available
+                    ? formatCoordinatesSummary(
+                        locations.startLocation.latitude,
+                        locations.startLocation.longitude,
+                        locations.startLocation.accuracy
+                      )
+                    : locations.startLocation.fallback_reason || 'Indisponível'}
+                </Text>
+              )}
+              {locations.completeLocation && (
+                <Text style={styles.gpsCoordLine}>
+                  Conclusão:{' '}
+                  {locations.completeLocation.available
+                    ? formatCoordinatesSummary(
+                        locations.completeLocation.latitude,
+                        locations.completeLocation.longitude,
+                        locations.completeLocation.accuracy
+                      )
+                    : locations.completeLocation.fallback_reason || 'Indisponível'}
+                </Text>
+              )}
+              {activeMapLocation && (
+                <View style={styles.gpsMapWrap}>
+                  <OsmLeafletMap
+                    testID="details-osm-map"
+                    latitude={activeMapLocation.latitude}
+                    longitude={activeMapLocation.longitude}
+                    accuracy={activeMapLocation.accuracy}
+                    title={
+                      locations.completeLocation?.available
+                        ? 'Local da Conclusão'
+                        : 'Local do Início'
+                    }
+                    subtitle={site?.name || inspection.site_name}
+                    height={180}
+                  />
+                </View>
+              )}
+            </View>
+          )}
         </Card>
 
         {/* Prazos e Instruções de Campo */}
@@ -711,12 +899,19 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
           <View style={styles.progressStatsGrid}>
             <View style={styles.statChip}>
               <Text style={styles.statValue}>
-                {progress.answeredItems}/{progress.totalItems}
+                {progress.answeredItems}/{progress.applicableItems}
               </Text>
               <Text style={styles.statLabel}>Respondidos</Text>
             </View>
             <View style={styles.statChip}>
-              <Text style={styles.statValue}>{progress.pendingRequiredItems}</Text>
+              <Text
+                style={[
+                  styles.statValue,
+                  progress.pendingRequiredCount > 0 && { color: tokens.colors.danger },
+                ]}
+              >
+                {progress.pendingRequiredCount}
+              </Text>
               <Text style={styles.statLabel}>Obrig. pendentes</Text>
             </View>
             <View style={styles.statChip}>
@@ -736,6 +931,22 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
             </View>
           </View>
 
+          {isEditableInspection && progress.pendingRequiredCount > 0 && (
+            <TouchableOpacity
+              testID="details-pending-items-trigger"
+              style={styles.pendingShortcutBanner}
+              onPress={() => setPendingModalVisible(true)}
+            >
+              <MaterialIcons name="assignment-late" size={18} color="#92400E" />
+              <Text style={styles.pendingShortcutText}>
+                {progress.pendingRequiredCount === 1
+                  ? '1 item obrigatório pendente — tocar para localizar'
+                  : `${progress.pendingRequiredCount} itens obrigatórios pendentes — tocar para localizar`}
+              </Text>
+              <MaterialIcons name="chevron-right" size={18} color="#92400E" />
+            </TouchableOpacity>
+          )}
+
           {groupedSections.length === 0 ? (
             <Text style={styles.noItemsText}>
               Nenhum item de snapshot encontrado localmente para esta inspeção.
@@ -749,8 +960,18 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                 {sectionItems.map((item) => {
                   const isAnswered = respondedItemIds.has(item.id);
                   const currentResponse = responseByItemId.get(item.id);
+                  const isFocused = focusedItemId === item.id;
+                  const showItemRenderer =
+                    (isChecklistInteractive && isEditableInspection) || isReadOnlyInspection;
                   return (
-                    <View key={item.id} style={styles.checklistItemBlock}>
+                    <View
+                      key={item.id}
+                      testID={`checklist-item-block-${item.id}`}
+                      style={[
+                        styles.checklistItemBlock,
+                        isFocused && styles.checklistItemFocused,
+                      ]}
+                    >
                       <View style={styles.checklistItemRow}>
                         <MaterialIcons
                           name={
@@ -772,11 +993,12 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                           </Text>
                           <Text style={styles.checklistItemMeta}>
                             {formatResponseTypeLabel(item.response_type)}
+                            {isFocused ? ' • Preenchimento obrigatório pendente' : ''}
                           </Text>
                         </View>
                       </View>
 
-                      {isChecklistInteractive && isEditableInspection && (
+                      {showItemRenderer && (
                         <View style={styles.interactiveInputWrap}>
                           <DynamicItemRenderer
                             testID={`checklist-item-input-${item.id}`}
@@ -785,6 +1007,7 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                             nonConformityDescription={
                               currentResponse?.non_conformity_description ?? ''
                             }
+                            disabled={isReadOnlyInspection}
                             onChange={(val) =>
                               void handleSaveChecklistAnswer(
                                 item,
@@ -811,7 +1034,7 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
         </Card>
       </ScrollView>
 
-      {/* Rodapé fixo com botão de ação dinâmico (RF-05, CA-03) */}
+      {/* Rodapé fixo com botão de ação dinâmico e acesso ao resumo pré-conclusão */}
       <View style={styles.footerBar}>
         <Button
           testID="inspection-action-button"
@@ -822,7 +1045,27 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
           onPress={handlePrimaryAction}
           accessibilityLabel={action.label}
         />
+        {(action.type === 'CONTINUE' || isReadOnlyInspection) && (
+          <Button
+            testID="details-go-to-summary-button"
+            title={
+              isReadOnlyInspection
+                ? 'Ver Resumo e Mapa'
+                : 'Revisar e Concluir Inspeção'
+            }
+            variant={isReadOnlyInspection ? 'secondary' : 'primary'}
+            onPress={handleOpenSummary}
+            style={styles.summaryFooterBtn}
+          />
+        )}
       </View>
+
+      <PendingItemsModal
+        visible={pendingModalVisible}
+        pendingItems={progress.pendingRequiredItems}
+        onClose={() => setPendingModalVisible(false)}
+        onSelectItem={handleSelectPendingItem}
+      />
 
       {/* Snackbar discreto em falha de refresh (EX-02, RT-03) */}
       {snackbar?.visible && (
@@ -1192,6 +1435,80 @@ const styles = StyleSheet.create({
     color: '#92400E',
   },
   scanQrButton: {
+    marginTop: tokens.spacing.s,
+  },
+  readOnlyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.s,
+    paddingVertical: tokens.spacing.s + 2,
+    paddingHorizontal: tokens.spacing.m,
+    borderRadius: tokens.borderRadius.medium,
+    borderWidth: 1,
+    marginBottom: tokens.spacing.m,
+  },
+  readOnlyBannerPending: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  readOnlyBannerSynced: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  readOnlyBannerText: {
+    flex: 1,
+    fontSize: tokens.typography.fontSizes.small + 1,
+    fontWeight: tokens.typography.fontWeights.bold,
+  },
+  feedbackWarning: {
+    backgroundColor: '#FFF3CD',
+    borderColor: '#FFE69C',
+  },
+  gpsBox: {
+    marginTop: tokens.spacing.s,
+    paddingTop: tokens.spacing.s,
+    borderTopWidth: 1,
+    borderTopColor: tokens.colors.border,
+    gap: 4,
+  },
+  gpsBoxTitle: {
+    fontSize: tokens.typography.fontSizes.small,
+    fontWeight: tokens.typography.fontWeights.bold,
+    color: tokens.colors.textMuted,
+    textTransform: 'uppercase',
+  },
+  gpsCoordLine: {
+    fontSize: tokens.typography.fontSizes.small + 1,
+    color: tokens.colors.text,
+  },
+  gpsMapWrap: {
+    marginTop: tokens.spacing.xs,
+  },
+  pendingShortcutBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.xs,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: tokens.borderRadius.medium,
+    padding: tokens.spacing.s,
+    marginBottom: tokens.spacing.s,
+  },
+  pendingShortcutText: {
+    flex: 1,
+    fontSize: tokens.typography.fontSizes.small + 1,
+    fontWeight: tokens.typography.fontWeights.bold,
+    color: '#92400E',
+  },
+  checklistItemFocused: {
+    borderWidth: 2,
+    borderColor: tokens.colors.danger,
+    borderRadius: tokens.borderRadius.medium,
+    padding: tokens.spacing.xs,
+    backgroundColor: '#FFF5F5',
+  },
+  summaryFooterBtn: {
     marginTop: tokens.spacing.s,
   },
   footerBar: {

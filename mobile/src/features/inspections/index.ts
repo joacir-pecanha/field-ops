@@ -42,3 +42,40 @@ export {
   type LoadInspectionDetailsResult,
   type UseInspectionDetailsOptions,
 } from './hooks/useInspectionDetails';
+
+export {
+  useInspectionProgress,
+  calculateInspectionProgress,
+  isChecklistItemAnswered,
+  type InspectionProgressSummary,
+  type PendingInspectionItem,
+  type PendingItemReason,
+  type UseInspectionProgressInput,
+} from './hooks/useInspectionProgress';
+
+export {
+  PendingItemsModal,
+  type PendingItemsModalProps,
+} from './components/PendingItemsModal';
+
+export {
+  AWAITING_SYNC_LABEL,
+  InspectionLifecycleError,
+  completeInspection,
+  ensureInspectionLocationsTable,
+  getInspectionLocations,
+  isInspectionReadOnly,
+  saveChecklistResponse,
+  startInspection,
+  type CompleteInspectionParams,
+  type CompleteInspectionResult,
+  type InspectionLifecycleDependencies,
+  type InspectionLocationRecord,
+  type InspectionLocationsResult,
+  type LifecycleErrorCode,
+  type LocationStage,
+  type SaveChecklistResponseParams,
+  type SaveChecklistResponseResult,
+  type StartInspectionParams,
+  type StartInspectionResult,
+} from './services/inspectionLifecycleService';

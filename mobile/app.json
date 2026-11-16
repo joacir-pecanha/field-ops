@@ -41,6 +41,12 @@
         {
           "cameraPermission": "Permitir que o FieldOps acesse a câmera para leitura de QR Codes de equipamentos e registro de evidências."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permitir que o FieldOps acesse sua localização pontual para registrar o início e a conclusão das inspeções em campo."
+        }
       ]
     ],
     "experiments": {

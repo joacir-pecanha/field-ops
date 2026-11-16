@@ -12,6 +12,10 @@ export default function InspectionsStackLayout() {
         name="[inspectionId]/index" 
         options={{ title: 'Detalhes da Inspeção' }} 
       />
+      <Stack.Screen 
+        name="[inspectionId]/summary" 
+        options={{ title: 'Resumo e Conclusão' }} 
+      />
     </Stack>
   );
 }
