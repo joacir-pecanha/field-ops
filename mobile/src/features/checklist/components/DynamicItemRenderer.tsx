@@ -20,6 +20,7 @@ export interface DynamicItemRendererProps {
   error?: string;
   nonConformityDescription?: string | null;
   onNonConformityDescriptionChange?: (description: string) => void;
+  onCapturePhoto?: (isNonConformity: boolean) => void;
   descriptionError?: string;
   disabled?: boolean;
   testID?: string;
@@ -69,6 +70,7 @@ export const DynamicItemRenderer = memo(
     error,
     nonConformityDescription = '',
     onNonConformityDescriptionChange,
+    onCapturePhoto,
     descriptionError,
     disabled = false,
     testID = `item-renderer-${item.id}`,
@@ -131,6 +133,10 @@ export const DynamicItemRenderer = memo(
       [onChange]
     );
 
+    const handleAttachNcPhoto = useCallback(() => {
+      onCapturePhoto?.(true);
+    }, [onCapturePhoto]);
+
     // Despacho do componente especializado conforme response_type
     const renderInputControl = () => {
       switch (item.response_type) {
@@ -142,6 +148,7 @@ export const DynamicItemRenderer = memo(
               nonConformityDescription={nonConformityDescription}
               onChange={handleConformityChange}
               onDescriptionChange={onNonConformityDescriptionChange}
+              onAttachPhoto={onCapturePhoto ? handleAttachNcPhoto : undefined}
               error={error}
               descriptionError={descriptionError}
               disabled={disabled}
@@ -259,7 +266,8 @@ export const DynamicItemRenderer = memo(
       prev.error === next.error &&
       prev.nonConformityDescription === next.nonConformityDescription &&
       prev.descriptionError === next.descriptionError &&
-      prev.disabled === next.disabled
+      prev.disabled === next.disabled &&
+      prev.onCapturePhoto === next.onCapturePhoto
     );
   }
 );

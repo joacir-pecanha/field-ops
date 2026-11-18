@@ -31,6 +31,14 @@ export async function resolve(specifier, context, nextResolve) {
     return nextResolve(new URL('./mocks/react-native-webview.mjs', import.meta.url).href, context);
   }
 
+  if (specifier === 'expo-file-system' || specifier === 'expo-file-system/legacy') {
+    return nextResolve(new URL('./mocks/expo-file-system.mjs', import.meta.url).href, context);
+  }
+
+  if (specifier === 'expo-image-manipulator') {
+    return nextResolve(new URL('./mocks/expo-image-manipulator.mjs', import.meta.url).href, context);
+  }
+
   let target = specifier;
   if (specifier.startsWith('@/')) {
     target = new URL(`../src/${specifier.slice(2)}`, import.meta.url).href;
@@ -63,6 +71,7 @@ export async function load(url, context, nextLoad) {
       (url.includes('components') ||
         url.includes('auth') ||
         url.includes('inspections') ||
+        url.includes('evidence') ||
         url.includes('location') ||
         url.includes('checklist') ||
         url.includes('scanner') ||

@@ -18,6 +18,12 @@ import {
   formatCoordinatesSummary,
 } from '@/features/location/services/locationService';
 import {
+  EvidenceGallery,
+  deleteEvidencePhoto,
+  listInspectionEvidences,
+  type EvidenceRecord,
+} from '@/features/evidence';
+import {
   AWAITING_SYNC_LABEL,
   INSPECTION_NOT_FOUND_MESSAGE,
   PERMISSION_DENIED_MESSAGE,
@@ -89,11 +95,18 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
     reloadLocal,
   } = useInspectionDetails(resolvedId, detailsOptions);
 
+  const [richEvidences, setRichEvidences] = useState<EvidenceRecord[]>([]);
+  const [deletingEvidenceId, setDeletingEvidenceId] = useState<string | null>(null);
+  const displayedEvidences: EvidenceRecord[] = useMemo(
+    () => (richEvidences.length > 0 ? richEvidences : evidences),
+    [richEvidences, evidences]
+  );
+
   const progress = useInspectionProgress({
     items,
     responses,
     sections,
-    evidences,
+    evidences: displayedEvidences,
   });
 
   const [locations, setLocations] = useState<InspectionLocationsResult>(
@@ -127,9 +140,22 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
     }
   }, [resolvedId, initialLocations, lifecycleDependencies]);
 
+  const loadRichEvidences = useCallback(async () => {
+    if (!resolvedId || detailsOptions?.initialData) {
+      return;
+    }
+    try {
+      const list = await listInspectionEvidences(resolvedId);
+      setRichEvidences(list);
+    } catch {
+      // Silencioso em SSR/web
+    }
+  }, [resolvedId, detailsOptions?.initialData]);
+
   useEffect(() => {
     void loadLocations();
-  }, [loadLocations]);
+    void loadRichEvidences();
+  }, [loadLocations, loadRichEvidences]);
 
   useFocusEffect(
     useCallback(() => {
@@ -139,7 +165,8 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
       }
       void reloadLocal();
       void loadLocations();
-    }, [reloadLocal, loadLocations])
+      void loadRichEvidences();
+    }, [reloadLocal, loadLocations, loadRichEvidences])
   );
 
   useEffect(() => {
@@ -184,6 +211,31 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
       },
     });
   }, [inspection, readOnly, router]);
+
+  const handleDeleteSummaryEvidence = useCallback(
+    async (evidence: EvidenceRecord) => {
+      if (!inspection) return;
+      setDeletingEvidenceId(evidence.id);
+      try {
+        const result = await deleteEvidencePhoto({
+          inspectionId: inspection.id,
+          evidenceId: evidence.id,
+          technicianId: user?.id ?? null,
+          userRole: user?.role ?? null,
+        });
+        if (!result.success) {
+          setFeedback({ type: 'warning', text: result.message });
+          return;
+        }
+        await reloadLocal();
+        await loadRichEvidences();
+        setFeedback({ type: 'info', text: result.message });
+      } finally {
+        setDeletingEvidenceId(null);
+      }
+    },
+    [inspection, user?.id, user?.role, reloadLocal, loadRichEvidences]
+  );
 
   const handleConfirmComplete = useCallback(async () => {
     if (!inspection || isCompleting || readOnly) return;
@@ -564,6 +616,23 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
               height={210}
             />
           </View>
+        </Card>
+
+        {/* Galeria consolidada de evidências fotográficas (TASK-016 Passo 5) */}
+        <Card testID="summary-evidences-card" style={styles.card}>
+          <View style={styles.cardHeader}>
+            <MaterialIcons name="photo-library" size={20} color={tokens.colors.primary} />
+            <Text style={styles.cardTitle}>Evidências Fotográficas Anexadas</Text>
+          </View>
+          <EvidenceGallery
+            testID="summary-evidence-gallery"
+            evidences={displayedEvidences}
+            readOnly={readOnly}
+            title="Galeria Local"
+            emptyMessage="Nenhuma evidência fotográfica anexada até o momento."
+            deletingId={deletingEvidenceId}
+            onDeleteEvidence={(ev) => void handleDeleteSummaryEvidence(ev)}
+          />
         </Card>
       </ScrollView>
 

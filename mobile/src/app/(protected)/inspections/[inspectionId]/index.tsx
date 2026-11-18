@@ -35,6 +35,12 @@ import {
 } from '@/features/inspections';
 import { DynamicItemRenderer } from '@/features/checklist';
 import {
+  EvidenceGallery,
+  deleteEvidencePhoto,
+  listInspectionEvidences,
+  type EvidenceRecord,
+} from '@/features/evidence';
+import {
   OsmLeafletMap,
   formatCoordinatesSummary,
 } from '@/features/location/services/locationService';
@@ -113,6 +119,7 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     focusItemId?: string;
     scannedCode?: string;
     divergenceJustified?: string;
+    evidenceSaved?: string;
   }>();
   const resolvedId = useMemo(() => {
     const raw = propInspectionId ?? params.inspectionId ?? params.id;
@@ -141,11 +148,18 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     refresh,
   } = useInspectionDetails(resolvedId, detailsOptions);
 
+  const [richEvidences, setRichEvidences] = useState<EvidenceRecord[]>([]);
+  const [deletingEvidenceId, setDeletingEvidenceId] = useState<string | null>(null);
+  const displayedEvidences: EvidenceRecord[] = useMemo(
+    () => (richEvidences.length > 0 ? richEvidences : evidences),
+    [richEvidences, evidences]
+  );
+
   const progress = useInspectionProgress({
     items,
     responses,
     sections,
-    evidences,
+    evidences: displayedEvidences,
   });
 
   const [isUpdatingAction, setIsUpdatingAction] = useState(false);
@@ -153,7 +167,8 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     Boolean(
       params.openChecklist === 'true' ||
         params.qrVerified === 'true' ||
-        params.focusItemId
+        params.focusItemId ||
+        params.evidenceSaved === 'true'
     )
   );
   const [focusedItemId, setFocusedItemId] = useState<string | null>(
@@ -184,11 +199,35 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     }
   }, [resolvedId, detailsOptions?.initialData]);
 
-  useEffect(() => {
-    void loadLocations();
-  }, [loadLocations]);
+  const loadRichEvidences = useCallback(async () => {
+    if (!resolvedId || detailsOptions?.initialData) {
+      return;
+    }
+    try {
+      const list = await listInspectionEvidences(resolvedId);
+      setRichEvidences(list);
+    } catch {
+      // Silencioso em fallback SSR/web
+    }
+  }, [resolvedId, detailsOptions?.initialData]);
 
   useEffect(() => {
+    void loadLocations();
+    void loadRichEvidences();
+  }, [loadLocations, loadRichEvidences]);
+
+  useEffect(() => {
+    if (params.evidenceSaved === 'true') {
+      setIsChecklistInteractive(true);
+      if (params.focusItemId) {
+        setFocusedItemId(params.focusItemId);
+      }
+      setActionFeedback({
+        type: 'success',
+        text: 'Evidência fotográfica salva offline no armazenamento permanente do dispositivo.',
+      });
+      return;
+    }
     if (params.focusItemId) {
       setIsChecklistInteractive(true);
       setFocusedItemId(params.focusItemId);
@@ -215,6 +254,7 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     params.qrVerified,
     params.divergenceJustified,
     params.focusItemId,
+    params.evidenceSaved,
   ]);
 
   useFocusEffect(
@@ -225,7 +265,8 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       }
       reloadLocal();
       void loadLocations();
-    }, [reloadLocal, loadLocations])
+      void loadRichEvidences();
+    }, [reloadLocal, loadLocations, loadRichEvidences])
   );
 
   // Captura GPS pontual de início automaticamente ao retornar do scanner com QR validado (RF-02, CA-04)
@@ -292,6 +333,17 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     }
     return map;
   }, [responses]);
+
+  const evidencesByItemId = useMemo(() => {
+    const map = new Map<string, EvidenceRecord[]>();
+    for (const ev of displayedEvidences) {
+      if (!ev.item_id) continue;
+      const list = map.get(ev.item_id) ?? [];
+      list.push(ev);
+      map.set(ev.item_id, list);
+    }
+    return map;
+  }, [displayedEvidences]);
 
   const verificationRecord = inspection
     ? getEquipmentVerificationRecord(inspection.id)
@@ -390,6 +442,60 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       params: { inspectionId: inspection.id },
     });
   }, [inspection, router]);
+
+  const handleOpenEvidenceCapture = useCallback(
+    (item: ChecklistItem, isNonConformity = false) => {
+      if (!inspection) return;
+      if (isReadOnlyInspection) {
+        setActionFeedback({
+          type: 'warning',
+          text: 'Edição bloqueada: fotos de inspeções concluídas ou aprovadas são somente leitura.',
+        });
+        return;
+      }
+      router.push({
+        pathname: '/(protected)/evidence/capture',
+        params: {
+          inspectionId: inspection.id,
+          itemId: item.id,
+          itemTitle: item.title,
+          isNonConformity: isNonConformity ? 'true' : 'false',
+        },
+      });
+    },
+    [inspection, isReadOnlyInspection, router]
+  );
+
+  const handleDeleteEvidence = useCallback(
+    async (evidence: EvidenceRecord) => {
+      if (!inspection) return;
+      setDeletingEvidenceId(evidence.id);
+      try {
+        const result = await deleteEvidencePhoto({
+          inspectionId: inspection.id,
+          evidenceId: evidence.id,
+          technicianId: user?.id ?? null,
+          userRole: user?.role ?? null,
+        });
+        if (!result.success) {
+          setActionFeedback({
+            type: 'warning',
+            text: result.message,
+          });
+          return;
+        }
+        await reloadLocal();
+        await loadRichEvidences();
+        setActionFeedback({
+          type: 'info',
+          text: result.message,
+        });
+      } finally {
+        setDeletingEvidenceId(null);
+      }
+    },
+    [inspection, user?.id, user?.role, reloadLocal, loadRichEvidences]
+  );
 
   const handleSelectPendingItem = useCallback((pendingItem: PendingInspectionItem) => {
     setPendingModalVisible(false);
@@ -960,6 +1066,11 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                 {sectionItems.map((item) => {
                   const isAnswered = respondedItemIds.has(item.id);
                   const currentResponse = responseByItemId.get(item.id);
+                  const itemEvidences = evidencesByItemId.get(item.id) ?? [];
+                  const isNcItem =
+                    Boolean(currentResponse?.is_non_conformity) ||
+                    currentResponse?.value === 'NON_CONFORMING' ||
+                    currentResponse?.value === 'NAO_CONFORME';
                   const isFocused = focusedItemId === item.id;
                   const showItemRenderer =
                     (isChecklistInteractive && isEditableInspection) || isReadOnlyInspection;
@@ -1008,6 +1119,11 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                               currentResponse?.non_conformity_description ?? ''
                             }
                             disabled={isReadOnlyInspection}
+                            onCapturePhoto={
+                              !isReadOnlyInspection
+                                ? (isNc) => handleOpenEvidenceCapture(item, isNc)
+                                : undefined
+                            }
                             onChange={(val) =>
                               void handleSaveChecklistAnswer(
                                 item,
@@ -1022,6 +1138,40 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                                 desc
                               )
                             }
+                          />
+
+                          {!isReadOnlyInspection && (
+                            <TouchableOpacity
+                              testID={`checklist-capture-photo-btn-${item.id}`}
+                              style={styles.capturePhotoBtn}
+                              activeOpacity={0.8}
+                              onPress={() => handleOpenEvidenceCapture(item, isNcItem)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Capturar foto para ${item.title}`}
+                            >
+                              <MaterialIcons
+                                name="add-a-photo"
+                                size={18}
+                                color={tokens.colors.primary}
+                              />
+                              <Text style={styles.capturePhotoBtnText}>
+                                Capturar Foto de Evidência
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+
+                      {itemEvidences.length > 0 && (
+                        <View style={styles.itemGalleryWrap}>
+                          <EvidenceGallery
+                            testID={`checklist-item-evidences-${item.id}`}
+                            evidences={itemEvidences}
+                            readOnly={isReadOnlyInspection}
+                            hideWhenEmpty
+                            title="Fotos Anexadas"
+                            deletingId={deletingEvidenceId}
+                            onDeleteEvidence={(ev) => void handleDeleteEvidence(ev)}
                           />
                         </View>
                       )}
@@ -1401,6 +1551,29 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.xs,
   },
   interactiveInputWrap: {
+    paddingLeft: tokens.spacing.m,
+    paddingBottom: tokens.spacing.s,
+  },
+  capturePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: tokens.spacing.xs,
+    borderWidth: 1.5,
+    borderColor: tokens.colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: tokens.borderRadius.medium,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: tokens.spacing.s + 2,
+    paddingHorizontal: tokens.spacing.m,
+    marginTop: -tokens.spacing.xs,
+  },
+  capturePhotoBtnText: {
+    fontSize: tokens.typography.fontSizes.small + 1,
+    fontWeight: tokens.typography.fontWeights.bold,
+    color: tokens.colors.primary,
+  },
+  itemGalleryWrap: {
     paddingLeft: tokens.spacing.m,
     paddingBottom: tokens.spacing.s,
   },
