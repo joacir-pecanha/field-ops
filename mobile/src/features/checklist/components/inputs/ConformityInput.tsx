@@ -17,6 +17,7 @@ export interface ConformityInputProps {
   nonConformityDescription?: string | null;
   onChange: (value: ConformityStateType) => void;
   onDescriptionChange?: (description: string) => void;
+  onAttachPhoto?: () => void;
   error?: string;
   descriptionError?: string;
   disabled?: boolean;
@@ -35,6 +36,7 @@ export const ConformityInput = memo(function ConformityInput({
   nonConformityDescription = '',
   onChange,
   onDescriptionChange,
+  onAttachPhoto,
   error,
   descriptionError,
   disabled = false,
@@ -185,6 +187,21 @@ export const ConformityInput = memo(function ConformityInput({
               Este apontamento será registrado na lista de não conformidades da inspeção.
             </Text>
           )}
+
+          {onAttachPhoto && !disabled && (
+            <TouchableOpacity
+              testID={`${testID}-attach-photo-btn`}
+              style={styles.attachPhotoButton}
+              activeOpacity={0.8}
+              onPress={onAttachPhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Anexar foto da não conformidade"
+            >
+              <Text style={styles.attachPhotoButtonText}>
+                📷 Anexar Foto da Não Conformidade
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -316,5 +333,22 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.fontSizes.small - 1,
     color: tokens.colors.textMuted,
     marginTop: tokens.spacing.xs,
+  },
+  attachPhotoButton: {
+    marginTop: tokens.spacing.s,
+    minHeight: 44,
+    borderRadius: tokens.borderRadius.medium,
+    borderWidth: 1.5,
+    borderColor: tokens.colors.danger,
+    backgroundColor: tokens.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: tokens.spacing.m,
+    paddingVertical: tokens.spacing.s,
+  },
+  attachPhotoButtonText: {
+    fontSize: tokens.typography.fontSizes.small + 1,
+    fontWeight: tokens.typography.fontWeights.bold,
+    color: tokens.colors.danger,
   },
 });
