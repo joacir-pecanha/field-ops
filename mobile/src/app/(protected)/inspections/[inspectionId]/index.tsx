@@ -41,6 +41,15 @@ import {
   type EvidenceRecord,
 } from '@/features/evidence';
 import {
+  NON_CONFORMITY_SEVERITY_META,
+  NonConformityFormModal,
+  nonConformityRepository,
+  type NonConformity,
+  type NonConformityDraftSnapshot,
+  type NonConformityFormSubmitPayload,
+  type NonConformitySeverity,
+} from '@/features/nonconformity';
+import {
   OsmLeafletMap,
   formatCoordinatesSummary,
 } from '@/features/location/services/locationService';
@@ -155,6 +164,19 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     [richEvidences, evidences]
   );
 
+  const [nonConformities, setNonConformities] = useState<NonConformity[]>([]);
+  const [ncModalVisible, setNcModalVisible] = useState(false);
+  const [ncTargetItem, setNcTargetItem] = useState<ChecklistItem | null>(null);
+  const [ncEditingRecord, setNcEditingRecord] = useState<NonConformity | null>(null);
+  const [ncDraftTitle, setNcDraftTitle] = useState('');
+  const [ncDraftDescription, setNcDraftDescription] = useState('');
+  const [ncDraftSeverity, setNcDraftSeverity] = useState<NonConformitySeverity>('MEDIA');
+  const [ncDraftEvidenceUris, setNcDraftEvidenceUris] = useState<string[]>([]);
+  const [ncDraftEvidenceIds, setNcDraftEvidenceIds] = useState<string[]>([]);
+  const [isSavingNc, setIsSavingNc] = useState(false);
+  const [isDeletingNc, setIsDeletingNc] = useState(false);
+  const [ncModalError, setNcModalError] = useState<string | null>(null);
+
   const progress = useInspectionProgress({
     items,
     responses,
@@ -211,10 +233,23 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     }
   }, [resolvedId, detailsOptions?.initialData]);
 
+  const loadNonConformities = useCallback(async () => {
+    if (!resolvedId || detailsOptions?.initialData) {
+      return;
+    }
+    try {
+      const list = await nonConformityRepository.findByInspectionId(resolvedId);
+      setNonConformities(list);
+    } catch {
+      // Silencioso em fallback SSR/web
+    }
+  }, [resolvedId, detailsOptions?.initialData]);
+
   useEffect(() => {
     void loadLocations();
     void loadRichEvidences();
-  }, [loadLocations, loadRichEvidences]);
+    void loadNonConformities();
+  }, [loadLocations, loadRichEvidences, loadNonConformities]);
 
   useEffect(() => {
     if (params.evidenceSaved === 'true') {
@@ -266,7 +301,8 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       reloadLocal();
       void loadLocations();
       void loadRichEvidences();
-    }, [reloadLocal, loadLocations, loadRichEvidences])
+      void loadNonConformities();
+    }, [reloadLocal, loadLocations, loadRichEvidences, loadNonConformities])
   );
 
   // Captura GPS pontual de início automaticamente ao retornar do scanner com QR validado (RF-02, CA-04)
@@ -345,6 +381,17 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     return map;
   }, [displayedEvidences]);
 
+  const nonConformitiesByItemId = useMemo(() => {
+    const map = new Map<string, NonConformity[]>();
+    for (const nc of nonConformities) {
+      if (!nc.item_id) continue;
+      const list = map.get(nc.item_id) ?? [];
+      list.push(nc);
+      map.set(nc.item_id, list);
+    }
+    return map;
+  }, [nonConformities]);
+
   const verificationRecord = inspection
     ? getEquipmentVerificationRecord(inspection.id)
     : null;
@@ -355,11 +402,137 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
   const isEditableInspection =
     !isReadOnlyInspection && (action.type === 'START' || action.type === 'CONTINUE');
 
+  const openNonConformityModal = useCallback(
+    (
+      targetItem: ChecklistItem | null = null,
+      existingNc: NonConformity | null = null,
+      prefillDescription?: string | null
+    ) => {
+      if (!inspection) return;
+      const itemEvidences = targetItem ? evidencesByItemId.get(targetItem.id) ?? [] : [];
+      const mergedUris = Array.from(
+        new Set([
+          ...(existingNc?.evidence_uris ?? []),
+          ...itemEvidences.map((ev) => ev.local_uri),
+        ])
+      );
+      const mergedIds = Array.from(
+        new Set([
+          ...(existingNc?.evidence_ids ?? []),
+          ...itemEvidences.map((ev) => ev.id),
+        ])
+      );
+
+      setNcTargetItem(targetItem);
+      setNcEditingRecord(existingNc);
+      setNcDraftTitle(
+        existingNc?.title ??
+          (targetItem ? `Não conformidade: ${targetItem.title}` : '')
+      );
+      setNcDraftDescription(
+        existingNc?.description ?? prefillDescription ?? ''
+      );
+      setNcDraftSeverity(existingNc?.severity ?? 'MEDIA');
+      setNcDraftEvidenceUris(mergedUris);
+      setNcDraftEvidenceIds(mergedIds);
+      setNcModalError(null);
+      setNcModalVisible(true);
+    },
+    [inspection, evidencesByItemId]
+  );
+
+  const handleSaveNonConformity = useCallback(
+    async (payload: NonConformityFormSubmitPayload) => {
+      if (!inspection) return;
+      setIsSavingNc(true);
+      setNcModalError(null);
+      try {
+        const result = ncEditingRecord
+          ? await nonConformityRepository.update(ncEditingRecord.id, {
+              ...payload,
+              technicianId: user?.id ?? null,
+              userRole: user?.role ?? null,
+            })
+          : await nonConformityRepository.create({
+              ...payload,
+              created_by: user?.id ?? null,
+              technicianId: user?.id ?? null,
+              userRole: user?.role ?? null,
+            });
+
+        if (!result.success) {
+          setNcModalError(result.message);
+          return;
+        }
+
+        await loadNonConformities();
+        await reloadLocal();
+        setNcModalVisible(false);
+        setActionFeedback({
+          type: 'success',
+          text: result.message,
+        });
+      } finally {
+        setIsSavingNc(false);
+      }
+    },
+    [inspection, ncEditingRecord, user?.id, user?.role, loadNonConformities, reloadLocal]
+  );
+
+  const handleDeleteOrCancelNonConformity = useCallback(
+    async (nc: NonConformity) => {
+      if (!inspection) return;
+      setIsDeletingNc(true);
+      setNcModalError(null);
+      try {
+        const result = await nonConformityRepository.deleteOrCancel(nc.id, {
+          technicianId: user?.id ?? null,
+          userRole: user?.role ?? null,
+        });
+
+        if (!result.success) {
+          setNcModalError(result.message);
+          return;
+        }
+
+        await loadNonConformities();
+        await reloadLocal();
+        setNcModalVisible(false);
+        setActionFeedback({
+          type: 'info',
+          text: result.message,
+        });
+      } finally {
+        setIsDeletingNc(false);
+      }
+    },
+    [inspection, user?.id, user?.role, loadNonConformities, reloadLocal]
+  );
+
+  const handleAttachPhotoFromNcModal = useCallback(
+    (draft: NonConformityDraftSnapshot) => {
+      if (!inspection) return;
+      setNcModalVisible(false);
+      router.push({
+        pathname: '/(protected)/evidence/capture',
+        params: {
+          inspectionId: inspection.id,
+          ...(draft.itemId ? { itemId: draft.itemId } : {}),
+          ...(draft.itemTitle ? { itemTitle: draft.itemTitle } : {}),
+          ...(ncEditingRecord?.id ? { nonConformityId: ncEditingRecord.id } : {}),
+          isNonConformity: 'true',
+        },
+      });
+    },
+    [inspection, ncEditingRecord?.id, router]
+  );
+
   const handleSaveChecklistAnswer = useCallback(
     async (
       item: ChecklistItem,
       nextValue: unknown,
-      nonConformityDescription?: string
+      nonConformityDescription?: string,
+      triggerNcModal = false
     ) => {
       if (!inspection) return;
       if (isReadOnlyInspection) {
@@ -390,6 +563,16 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
         }
 
         await reloadLocal();
+
+        // RF-05 (TASK-017): Ao marcar item como "Não Conforme", abre automaticamente o modal de registro
+        if (
+          triggerNcModal &&
+          item.response_type === 'CONFORMITY' &&
+          (nextValue === 'NON_CONFORMING' || nextValue === 'NAO_CONFORME')
+        ) {
+          const existingItemNc = nonConformitiesByItemId.get(item.id)?.[0] ?? null;
+          openNonConformityModal(item, existingItemNc, nonConformityDescription);
+        }
       } catch (err: any) {
         if (err instanceof InspectionLifecycleError && err.code === 'READ_ONLY_INSPECTION') {
           setActionFeedback({
@@ -404,7 +587,16 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
         });
       }
     },
-    [inspection, isReadOnlyInspection, user?.id, user?.role, focusedItemId, reloadLocal]
+    [
+      inspection,
+      isReadOnlyInspection,
+      user?.id,
+      user?.role,
+      focusedItemId,
+      reloadLocal,
+      nonConformitiesByItemId,
+      openNonConformityModal,
+    ]
   );
 
   const groupedSections = useMemo(() => {
@@ -1067,6 +1259,7 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                   const isAnswered = respondedItemIds.has(item.id);
                   const currentResponse = responseByItemId.get(item.id);
                   const itemEvidences = evidencesByItemId.get(item.id) ?? [];
+                  const itemNonConformities = nonConformitiesByItemId.get(item.id) ?? [];
                   const isNcItem =
                     Boolean(currentResponse?.is_non_conformity) ||
                     currentResponse?.value === 'NON_CONFORMING' ||
@@ -1128,17 +1321,48 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                               void handleSaveChecklistAnswer(
                                 item,
                                 val,
-                                currentResponse?.non_conformity_description ?? undefined
+                                currentResponse?.non_conformity_description ?? undefined,
+                                val === 'NON_CONFORMING' || val === 'NAO_CONFORME'
                               )
                             }
                             onNonConformityDescriptionChange={(desc) =>
                               void handleSaveChecklistAnswer(
                                 item,
                                 currentResponse?.value ?? 'NON_CONFORMING',
-                                desc
+                                desc,
+                                false
                               )
                             }
                           />
+
+                          {(isNcItem || itemNonConformities.length > 0) && (
+                            <TouchableOpacity
+                              testID={`checklist-item-nc-btn-${item.id}`}
+                              style={styles.itemNcActionBtn}
+                              activeOpacity={0.8}
+                              onPress={() =>
+                                openNonConformityModal(
+                                  item,
+                                  itemNonConformities[0] ?? null,
+                                  currentResponse?.non_conformity_description
+                                )
+                              }
+                              accessibilityRole="button"
+                            >
+                              <MaterialIcons
+                                name="report-problem"
+                                size={16}
+                                color={tokens.colors.danger}
+                              />
+                              <Text style={styles.itemNcActionText}>
+                                {itemNonConformities.length > 0
+                                  ? isReadOnlyInspection
+                                    ? `Consultar Não Conformidade (${NON_CONFORMITY_SEVERITY_META[itemNonConformities[0].severity].label})`
+                                    : `Editar Não Conformidade (${NON_CONFORMITY_SEVERITY_META[itemNonConformities[0].severity].label})`
+                                  : 'Classificar e Registrar Não Conformidade'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
 
                           {!isReadOnlyInspection && (
                             <TouchableOpacity
@@ -1182,6 +1406,88 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
             ))
           )}
         </Card>
+
+        {/* Seção de Não Conformidades da Inspeção (TASK-017) */}
+        {(isEditableInspection || nonConformities.length > 0) && (
+          <Card testID="details-nonconformities-card" style={styles.sectionCard}>
+            <View style={styles.cardHeaderBetween}>
+              <View style={styles.cardHeader}>
+                <MaterialIcons name="report-problem" size={20} color={tokens.colors.danger} />
+                <Text style={styles.cardTitle}>
+                  Não Conformidades ({nonConformities.length})
+                </Text>
+              </View>
+            </View>
+
+            {nonConformities.length === 0 ? (
+              <Text style={styles.noItemsText}>
+                Nenhuma não conformidade registrada formalmente até o momento.
+              </Text>
+            ) : (
+              <View style={styles.ncSummaryList}>
+                {nonConformities.map((nc) => {
+                  const sevMeta = NON_CONFORMITY_SEVERITY_META[nc.severity];
+                  return (
+                    <TouchableOpacity
+                      key={nc.id}
+                      testID={`details-nc-row-${nc.id}`}
+                      style={[
+                        styles.ncSummaryRow,
+                        { borderLeftColor: sevMeta.accentColor },
+                      ]}
+                      activeOpacity={0.8}
+                      onPress={() => openNonConformityModal(null, nc)}
+                    >
+                      <View style={styles.ncSummaryHeader}>
+                        <Text style={styles.ncSummaryTitle} numberOfLines={1}>
+                          {nc.title}
+                        </Text>
+                        <View
+                          style={[
+                            styles.ncSeverityBadge,
+                            {
+                              backgroundColor: sevMeta.badgeBg,
+                              borderColor: sevMeta.badgeBorder,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.ncSeverityBadgeText,
+                              { color: sevMeta.badgeText },
+                            ]}
+                          >
+                            {sevMeta.label.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                      {!!nc.item_title && (
+                        <Text style={styles.ncSummaryMeta} numberOfLines={1}>
+                          Item: {nc.item_title}
+                        </Text>
+                      )}
+                      {!!nc.description && (
+                        <Text style={styles.ncSummaryDesc} numberOfLines={2}>
+                          {nc.description}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            {isEditableInspection && (
+              <Button
+                testID="details-add-nc-button"
+                title="Registrar Não Conformidade"
+                variant="secondary"
+                onPress={() => openNonConformityModal(null, null)}
+                style={styles.addNcFooterBtn}
+              />
+            )}
+          </Card>
+        )}
       </ScrollView>
 
       {/* Rodapé fixo com botão de ação dinâmico e acesso ao resumo pré-conclusão */}
@@ -1215,6 +1521,30 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
         pendingItems={progress.pendingRequiredItems}
         onClose={() => setPendingModalVisible(false)}
         onSelectItem={handleSelectPendingItem}
+      />
+
+      <NonConformityFormModal
+        visible={ncModalVisible}
+        inspectionId={inspection.id}
+        itemId={ncTargetItem?.id ?? ncEditingRecord?.item_id ?? null}
+        itemTitle={ncTargetItem?.title ?? ncEditingRecord?.item_title ?? null}
+        initialNonConformity={ncEditingRecord}
+        initialTitle={ncDraftTitle}
+        initialDescription={ncDraftDescription}
+        initialSeverity={ncDraftSeverity}
+        initialEvidenceUris={ncDraftEvidenceUris}
+        initialEvidenceIds={ncDraftEvidenceIds}
+        readOnly={isReadOnlyInspection}
+        isSaving={isSavingNc}
+        isDeleting={isDeletingNc}
+        errorMessage={ncModalError}
+        onClose={() => {
+          setNcModalVisible(false);
+          setNcModalError(null);
+        }}
+        onSubmit={handleSaveNonConformity}
+        onDeleteOrCancel={handleDeleteOrCancelNonConformity}
+        onAttachPhoto={handleAttachPhotoFromNcModal}
       />
 
       {/* Snackbar discreto em falha de refresh (EX-02, RT-03) */}
@@ -1680,6 +2010,72 @@ const styles = StyleSheet.create({
     borderRadius: tokens.borderRadius.medium,
     padding: tokens.spacing.xs,
     backgroundColor: '#FFF5F5',
+  },
+  itemNcActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: tokens.spacing.xs,
+    borderWidth: 1,
+    borderColor: tokens.colors.danger,
+    borderRadius: tokens.borderRadius.medium,
+    backgroundColor: '#FEF2F2',
+    paddingVertical: tokens.spacing.s,
+    paddingHorizontal: tokens.spacing.m,
+    marginBottom: tokens.spacing.s,
+  },
+  itemNcActionText: {
+    fontSize: tokens.typography.fontSizes.small + 1,
+    fontWeight: tokens.typography.fontWeights.bold,
+    color: tokens.colors.danger,
+  },
+  ncSummaryList: {
+    gap: tokens.spacing.s,
+    marginBottom: tokens.spacing.s,
+  },
+  ncSummaryRow: {
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderLeftWidth: 4,
+    borderRadius: tokens.borderRadius.medium,
+    backgroundColor: '#F8FAFC',
+    padding: tokens.spacing.s + 2,
+    gap: 4,
+  },
+  ncSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacing.s,
+  },
+  ncSummaryTitle: {
+    flex: 1,
+    fontSize: tokens.typography.fontSizes.small + 2,
+    fontWeight: tokens.typography.fontWeights.bold,
+    color: tokens.colors.text,
+  },
+  ncSeverityBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  ncSeverityBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  ncSummaryMeta: {
+    fontSize: tokens.typography.fontSizes.small,
+    color: tokens.colors.primary,
+    fontWeight: tokens.typography.fontWeights.medium,
+  },
+  ncSummaryDesc: {
+    fontSize: tokens.typography.fontSizes.small + 1,
+    color: tokens.colors.textMuted,
+    lineHeight: 18,
+  },
+  addNcFooterBtn: {
+    marginTop: tokens.spacing.xs,
   },
   summaryFooterBtn: {
     marginTop: tokens.spacing.s,
