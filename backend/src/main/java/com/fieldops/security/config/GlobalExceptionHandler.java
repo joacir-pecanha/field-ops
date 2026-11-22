@@ -8,6 +8,7 @@ import com.fieldops.modules.master.domain.UserStatus;
 import com.fieldops.modules.master.exception.BusinessRuleException;
 import com.fieldops.modules.master.exception.DuplicateResourceException;
 import com.fieldops.modules.master.exception.ResourceNotFoundException;
+import com.fieldops.modules.sync.exception.InvalidEvidenceFileException;
 import com.fieldops.modules.template.exception.TemplatePublishValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -27,6 +28,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.net.URI;
 import java.time.Instant;
@@ -186,6 +189,66 @@ public class GlobalExceptionHandler {
                 "Dados inválidos para agendamento",
                 ex.getMessage(),
                 ex.getCode(),
+                request
+        );
+    }
+
+    @ExceptionHandler(InvalidEvidenceFileException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidEvidenceFile(
+            InvalidEvidenceFileException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Upload de evidência rejeitado ({}) em {}", ex.getCode(), request.getRequestURI());
+        ProblemDetail problem = createProblemDetail(
+                ex.getHttpStatus(),
+                "invalid-evidence-file",
+                "Arquivo de evidência inválido ou rejeitado",
+                ex.getMessage(),
+                ex.getCode(),
+                request
+        );
+        problem.setProperty("file_status", ex.getFileStatus());
+        if (ex.getEvidenceId() != null) {
+            problem.setProperty("evidence_id", ex.getEvidenceId().toString());
+        }
+        if (ex.getOriginalFileName() != null) {
+            problem.setProperty("file_name", ex.getOriginalFileName());
+        }
+        if (ex.getMimeType() != null) {
+            problem.setProperty("mime_type", ex.getMimeType());
+        }
+        return ResponseEntity.status(ex.getHttpStatus()).body(problem);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Upload rejeitado por exceder limite máximo em {}", request.getRequestURI());
+        ProblemDetail problem = createProblemDetail(
+                HttpStatus.valueOf(413),
+                "evidence-file-too-large",
+                "Arquivo de evidência excede o limite permitido",
+                "O arquivo enviado excede o tamanho máximo permitido para evidências fotográficas.",
+                "EVIDENCE_FILE_TOO_LARGE",
+                request
+        );
+        problem.setProperty("file_status", "FAILED");
+        return ResponseEntity.status(413).body(problem);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ProblemDetail> handleMissingMultipartPart(
+            MissingServletRequestPartException ex,
+            HttpServletRequest request
+    ) {
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "missing-multipart-part",
+                "Parte obrigatória ausente",
+                "O campo multipart '" + ex.getRequestPartName() + "' é obrigatório.",
+                "MISSING_MULTIPART_PART",
                 request
         );
     }

@@ -51,23 +51,39 @@ A sincronização é o elemento central da arquitetura offline-first do FieldOps
 ---
 
 ## 5. Plano de Execução Passo a Passo
-- [ ] **Passo 1:** Criar tabelas SQL Flyway para `processed_operations`, `inspection_responses` e `evidence_files`.
-- [ ] **Passo 2:** Implementar despachante `SyncBatchProcessor` que itera sobre o lote chamando os handlers de cada tipo de operação.
-- [ ] **Passo 3:** Implementar verificação de idempotência antes da execução da mutação.
-- [ ] **Passo 4:** Criar controller REST para recebimento do lote e montagem do DTO de resposta por operação.
-- [ ] **Passo 5:** Implementar serviço de armazenamento de arquivos (`EvidenceStorageService`) com validação MIME type (JPEG/PNG) e limite de tamanho.
-- [ ] **Passo 6:** Escrever testes de integração simulando reenvio de lotes duplicados, falhas parciais e upload de fotos.
+- [x] **Passo 1:** Criar tabelas SQL Flyway para `processed_operations`, `inspection_responses` e `evidence_files`.
+- [x] **Passo 2:** Implementar despachante `SyncBatchProcessor` que itera sobre o lote chamando os handlers de cada tipo de operação.
+- [x] **Passo 3:** Implementar verificação de idempotência antes da execução da mutação.
+- [x] **Passo 4:** Criar controller REST para recebimento do lote e montagem do DTO de resposta por operação.
+- [x] **Passo 5:** Implementar serviço de armazenamento de arquivos (`EvidenceStorageService`) com validação MIME type (JPEG/PNG) e limite de tamanho.
+- [x] **Passo 6:** Escrever testes de integração simulando reenvio de lotes duplicados, falhas parciais e upload de fotos.
 
 ---
 
 ## 6. Critérios de Aceitação (Definition of Done)
-- [ ] **CA-01:** Envio de lote com 10 operações aplica todas no banco de dados e retorna confirmação para cada UUID.
-- [ ] **CA-02:** Reenviar o mesmo lote exatamente igual retorna status `SUCCESS` sem criar registros duplicados no PostgreSQL.
-- [ ] **CA-03:** Falha em uma operação individual não compromete as operações anteriores que foram bem-sucedidas.
-- [ ] **CA-04:** Fotos são salvas em armazenamento de objetos/disco e vinculadas às respostas no banco.
+- [x] **CA-01:** Envio de lote com 10 operações aplica todas no banco de dados e retorna confirmação para cada UUID.
+- [x] **CA-02:** Reenviar o mesmo lote exatamente igual retorna status `SUCCESS` sem criar registros duplicados no PostgreSQL.
+- [x] **CA-03:** Falha em uma operação individual não compromete as operações anteriores que foram bem-sucedidas.
+- [x] **CA-04:** Fotos são salvas em armazenamento de objetos/disco e vinculadas às respostas no banco.
 - [ ] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
 ## 7. Registro de Execução & Decisões Técnicas
-*(Preenchido durante o desenvolvimento)*
+- **Data da Execução:** 2026-11-22
+- **Migration Flyway (`V5`):** Criada a migration `backend/src/main/resources/db/migration/V5__sync_and_idempotency_schema.sql` contendo as tabelas `processed_operations` (chave primária e restrição única em `operation_id`), `inspection_responses` (chave única em `inspection_item_id`), `non_conformities`, `evidence_files` e colunas opcionais de geolocalização de início/conclusão na tabela `inspections` (numerada como `V5` pois `V4` já estava ocupada por `V4__inspections_and_snapshots_schema.sql` da TASK-011).
+- **Idempotência Atômica & Isolamento Transacional (`SyncBatchProcessor`):**
+  - As operações recebidas no lote são ordenadas topologicamente respeitando a precedência causal (`START_INSPECTION` -> `SAVE_RESPONSE`/`SUBMIT_RESPONSE` -> `UPLOAD_EVIDENCE` -> `CREATE_NON_CONFORMITY`/`UPDATE_NON_CONFORMITY`/`CANCEL_NON_CONFORMITY` -> `COMPLETE_INSPECTION`) e o campo `dependencies`.
+  - A existência do `operation_id` em `processed_operations` é verificada antes da execução da mutação; em reenvios duplicados retorna sucesso com `status = "ALREADY_PROCESSED"` e `error_code = "ALREADY_PROCESSED"` sem duplicar registros nem eventos de auditoria.
+  - Cada mutação é executada em transação isolada (`TransactionDefinition.PROPAGATION_REQUIRES_NEW`) junto da gravação em `processed_operations`. Falhas por regra de negócio ou conflitos revertem apenas a operação falha e registram o erro individual na resposta sem afetar as demais operações válidas do lote.
+  - Mutações tardias em inspeções `APROVADA` ou `CANCELADA`, bem como divergência de `base_version`, são rejeitadas com código `CONFLICT`. Os timestamps `client_timestamp` e `server_timestamp` são preservados em todas as entidades e respostas.
+- **Armazenamento e Validação de Evidências (`EvidenceStorageService`):**
+  - Valida tipo MIME (`image/jpeg`, `image/jpg`, `image/png`), assinatura binária (magic bytes), decodificação da imagem via `ImageIO` (bloqueando imagens vazias ou corrompidas com HTTP `415 Unsupported Media Type` e `file_status = "FAILED"`), limite configurável de tamanho e checksum SHA-256 opcional.
+  - Grava arquivos em disco com nome baseado no UUID (`<inspectionId>/<evidenceId>.<ext>`), calcula hash SHA-256 de integridade e vincula automaticamente à inspeção, item do snapshot, resposta (`inspection_responses`) e não conformidade (`non_conformities`).
+- **Endpoints REST (`SyncController`) e Cliente Mobile:**
+  - Expostos `POST /api/v1/sync/batch`, `POST /api/v1/sync/upload`, `GET /api/v1/sync/evidences/{id}` e `GET /api/v1/sync/evidences/{id}/content`.
+  - `HttpSyncApiClient` em `mobile/src/infrastructure/sync/outboxEngine.ts` atualizado para incluir o cabeçalho `Authorization: Bearer <token>` a partir de `authStorage.getAccessToken()` e respeitar `EXPO_PUBLIC_API_URL`.
+- **Evidências de Testes Automatizados:**
+  - `.\backend\mvnw.cmd -f backend/pom.xml clean test "-Djava.version=23" "-Dmaven.compiler.release=23"`: **38/38 testes aprovados** (`SyncBatchIntegrationTest`: 7/7, `InspectionSchedulingTest`: 7/7, `AuthControllerTest`: 10/10, `MasterDataIntegrationTest`: 7/7, `TemplateLifecycleTest`: 6/6, `FieldOpsBackendApplicationTests`: 1/1; `0` falhas, `0` erros, `0` ignorados).
+  - `node mobile\node_modules\typescript\bin\tsc -p mobile\tsconfig.json --noEmit`: saída `0` (`0` erros de tipagem).
+  - `npm --prefix mobile test`: **167/167 testes aprovados** em `46` suítes (`0` falhas).

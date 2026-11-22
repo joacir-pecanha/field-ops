@@ -9,6 +9,7 @@ import { OutboxRepository, outboxRepository as defaultOutboxRepo } from '../data
 import { InspectionRepository, inspectionRepository as defaultInspectionRepo } from '../database/repositories/inspectionRepository';
 import { NetworkMonitor, networkMonitor as defaultNetworkMonitor, type INetworkMonitor } from './networkMonitor';
 import { generateUUID } from './uuid';
+import { authStorage } from '../../features/auth/services/authStorage';
 
 export interface SyncBatchOperation {
   id: string; // UUID v4 idempotente
@@ -45,19 +46,30 @@ export interface SyncApiClient {
  */
 export class HttpSyncApiClient implements SyncApiClient {
   private baseUrl: string;
+  private getAccessTokenFn: () => Promise<string | null>;
 
-  constructor(baseUrl: string = 'http://localhost:8080') {
+  constructor(
+    baseUrl: string = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080',
+    getAccessToken: () => Promise<string | null> = () => authStorage.getAccessToken()
+  ) {
     this.baseUrl = baseUrl;
+    this.getAccessTokenFn = getAccessToken;
   }
 
   async sendBatch(batch: SyncBatchRequest): Promise<SyncBatchResponse> {
     const url = `${this.baseUrl}/api/v1/sync/batch`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': batch.batch_id,
+    };
+    const token = await this.getAccessTokenFn();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': batch.batch_id,
-      },
+      headers,
       body: JSON.stringify(batch),
     });
 
