@@ -49,9 +49,9 @@ O apontamento de não conformidades (defeitos, riscos operacionais, inconformida
 ---
 
 ## 5. Plano de Execução Passo a Passo
-- [ ] **Passo 1:** Definir schemas Zod e tipos TypeScript para Não Conformidades.
-- [ ] **Passo 2:** Implementar operações no SQLite em `nonConformityRepository.ts`.
-- [ ] **Passo 3:** Desenvolver o componente modal `NonConformityFormModal.tsx` com seletores de criticidade com cores de advertência.
+- [X] **Passo 1:** Definir schemas Zod e tipos TypeScript para Não Conformidades.
+- [X] **Passo 2:** Implementar operações no SQLite em `nonConformityRepository.ts`.
+- [X] **Passo 3:** Desenvolver o componente modal `NonConformityFormModal.tsx` com seletores de criticidade com cores de advertência.
 - [ ] **Passo 4:** Conectar o botão de anexo de foto ao fluxo de câmera desenvolvido na TASK-016.
 - [ ] **Passo 5:** Criar a tela de lista `non-conformities.tsx` agrupando ocorrências por nível de gravidade.
 - [ ] **Passo 6:** Escrever testes unitários validando as regras condicionais do schema Zod.
