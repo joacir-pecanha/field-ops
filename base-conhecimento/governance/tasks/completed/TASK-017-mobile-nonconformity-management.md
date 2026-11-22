@@ -3,12 +3,12 @@
 ## 1. Metadados
 - **ID:** TASK-017
 - **Épico / Módulo:** Mobile / Não Conformidades
-- **Status:** APPROVED
+- **Status:** COMPLETED
 - **Responsável Humano / Aprovador:** Joacir Peçanha
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md](file:///c:/Users/Joacir/Desktop/field-ops/base-conhecimento/governance/specs/SPEC-001-mobile-sqlite-schema.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-22
 
 ---
 
@@ -63,7 +63,7 @@ O apontamento de não conformidades (defeitos, riscos operacionais, inconformida
 - [X] **CA-02:** Salvar como `CRITICA` sem foto é bloqueado pela validação visual e de schema.
 - [X] **CA-03:** A não conformidade é enviada para a fila Outbox para sincronização com o backend.
 - [X] **CA-04:** `npx tsc --noEmit` executa sem nenhum erro de tipagem.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [X] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
