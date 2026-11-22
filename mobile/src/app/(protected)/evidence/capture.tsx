@@ -22,9 +22,14 @@ import {
 import {
   PhotoPreviewModal,
   captureAndSaveEvidence,
+  type EvidenceRecord,
   type FileSystemAdapter,
   type PhotoCaptureDependencies,
 } from '@/features/evidence';
+import {
+  useNonConformityDraftStore,
+  type NonConformityReturnRoute,
+} from '@/features/nonconformity';
 
 export interface CapturedDraftPhoto {
   uri: string;
@@ -40,6 +45,8 @@ export interface CaptureEvidenceScreenProps {
   itemTitle?: string;
   nonConformityId?: string;
   isNonConformity?: boolean;
+  returnToNcModal?: boolean | string;
+  returnRoute?: NonConformityReturnRoute;
   initialPermissionState?: Partial<CameraPermissionState>;
   initialPreviewPhoto?: CapturedDraftPhoto | null;
   initialCameraMountError?: string | null;
@@ -140,6 +147,8 @@ export default function CaptureEvidenceScreen(props: CaptureEvidenceScreenProps)
     itemTitle: propItemTitle,
     nonConformityId: propNonConformityId,
     isNonConformity: propIsNonConformity,
+    returnToNcModal: propReturnToNcModal,
+    returnRoute: propReturnRoute,
     initialPermissionState,
     initialPreviewPhoto = null,
     initialCameraMountError = null,
@@ -155,6 +164,8 @@ export default function CaptureEvidenceScreen(props: CaptureEvidenceScreenProps)
     itemTitle?: string;
     nonConformityId?: string;
     isNonConformity?: string;
+    returnToNcModal?: string;
+    returnRoute?: string;
   }>();
 
   const resolvedInspectionId = useMemo(() => {
@@ -191,6 +202,21 @@ export default function CaptureEvidenceScreen(props: CaptureEvidenceScreenProps)
     return raw === 'true' || Boolean(resolvedNonConformityId);
   }, [propIsNonConformity, params.isNonConformity, resolvedNonConformityId]);
 
+  const resolvedReturnToNcModal = useMemo(() => {
+    if (typeof propReturnToNcModal === 'boolean') {
+      return propReturnToNcModal;
+    }
+    const raw = propReturnToNcModal ?? params.returnToNcModal;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return value === 'true';
+  }, [propReturnToNcModal, params.returnToNcModal]);
+
+  const resolvedReturnRoute = useMemo<NonConformityReturnRoute>(() => {
+    const raw = propReturnRoute ?? params.returnRoute;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return value === 'non-conformities' ? 'non-conformities' : 'details';
+  }, [propReturnRoute, params.returnRoute]);
+
   const permission = useCameraPermission({
     autoCheck: autoCheckPermission && !initialPermissionState,
     initialState: initialPermissionState,
@@ -213,15 +239,44 @@ export default function CaptureEvidenceScreen(props: CaptureEvidenceScreenProps)
   const [simulatorExpanded, setSimulatorExpanded] = useState(Platform.OS === 'web');
 
   const navigateBack = useCallback(
-    (saved = false) => {
+    (saved = false, capturedEvidence: EvidenceRecord | null = null) => {
       if (resolvedInspectionId) {
+        if (resolvedReturnToNcModal) {
+          useNonConformityDraftStore.getState().markReadyToRestore(resolvedInspectionId);
+        }
+
+        if (resolvedReturnRoute === 'non-conformities') {
+          router.replace({
+            pathname: '/(protected)/inspections/[inspectionId]/non-conformities',
+            params: {
+              inspectionId: resolvedInspectionId,
+              ...(resolvedReturnToNcModal ? { restoreNcModal: 'true' } : {}),
+              ...(saved ? { evidenceSaved: 'true' } : {}),
+              ...(saved && capturedEvidence
+                ? {
+                    capturedEvidenceId: capturedEvidence.id,
+                    capturedEvidenceUri: capturedEvidence.local_uri,
+                  }
+                : {}),
+            },
+          });
+          return;
+        }
+
         router.replace({
           pathname: '/(protected)/inspections/[inspectionId]',
           params: {
             inspectionId: resolvedInspectionId,
             openChecklist: 'true',
             ...(resolvedItemId ? { focusItemId: resolvedItemId } : {}),
+            ...(resolvedReturnToNcModal ? { restoreNcModal: 'true' } : {}),
             ...(saved ? { evidenceSaved: 'true' } : {}),
+            ...(saved && capturedEvidence
+              ? {
+                  capturedEvidenceId: capturedEvidence.id,
+                  capturedEvidenceUri: capturedEvidence.local_uri,
+                }
+              : {}),
           },
         });
         return;
@@ -230,7 +285,13 @@ export default function CaptureEvidenceScreen(props: CaptureEvidenceScreenProps)
         router.back();
       }
     },
-    [router, resolvedInspectionId, resolvedItemId]
+    [
+      router,
+      resolvedInspectionId,
+      resolvedItemId,
+      resolvedReturnToNcModal,
+      resolvedReturnRoute,
+    ]
   );
 
   const handleTakePhoto = useCallback(async () => {
@@ -337,8 +398,18 @@ export default function CaptureEvidenceScreen(props: CaptureEvidenceScreenProps)
         return;
       }
 
+      if (resolvedReturnToNcModal && result.evidence) {
+        useNonConformityDraftStore
+          .getState()
+          .appendCapturedEvidence(
+            resolvedInspectionId,
+            result.evidence.local_uri,
+            result.evidence.id
+          );
+      }
+
       setPendingPhoto(null);
-      navigateBack(true);
+      navigateBack(true, result.evidence);
     } catch (err: any) {
       setPreviewError(
         err?.message || 'Erro inesperado ao salvar a fotografia localmente.'
@@ -353,6 +424,7 @@ export default function CaptureEvidenceScreen(props: CaptureEvidenceScreenProps)
     resolvedItemId,
     resolvedNonConformityId,
     resolvedIsNonConformity,
+    resolvedReturnToNcModal,
     captureDependencies,
     user?.id,
     user?.role,

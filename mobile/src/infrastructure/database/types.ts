@@ -201,6 +201,7 @@ export type OutboxEntityType =
   | 'INSPECTION'
   | 'CHECKLIST_RESPONSE'
   | 'EVIDENCE'
+  | 'NON_CONFORMITY'
   | string;
 
 export type OutboxOperationType =
@@ -208,6 +209,9 @@ export type OutboxOperationType =
   | 'SUBMIT_RESPONSE'
   | 'UPLOAD_EVIDENCE'
   | 'COMPLETE_INSPECTION'
+  | 'CREATE_NON_CONFORMITY'
+  | 'UPDATE_NON_CONFORMITY'
+  | 'CANCEL_NON_CONFORMITY'
   | 'CREATE'
   | string;
 

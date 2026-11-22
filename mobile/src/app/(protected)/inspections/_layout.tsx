@@ -16,6 +16,10 @@ export default function InspectionsStackLayout() {
         name="[inspectionId]/summary" 
         options={{ title: 'Resumo e Conclusão' }} 
       />
+      <Stack.Screen 
+        name="[inspectionId]/non-conformities" 
+        options={{ title: 'Não Conformidades' }} 
+      />
     </Stack>
   );
 }
