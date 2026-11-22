@@ -52,20 +52,34 @@ O apontamento de não conformidades (defeitos, riscos operacionais, inconformida
 - [X] **Passo 1:** Definir schemas Zod e tipos TypeScript para Não Conformidades.
 - [X] **Passo 2:** Implementar operações no SQLite em `nonConformityRepository.ts`.
 - [X] **Passo 3:** Desenvolver o componente modal `NonConformityFormModal.tsx` com seletores de criticidade com cores de advertência.
-- [ ] **Passo 4:** Conectar o botão de anexo de foto ao fluxo de câmera desenvolvido na TASK-016.
-- [ ] **Passo 5:** Criar a tela de lista `non-conformities.tsx` agrupando ocorrências por nível de gravidade.
-- [ ] **Passo 6:** Escrever testes unitários validando as regras condicionais do schema Zod.
+- [X] **Passo 4:** Conectar o botão de anexo de foto ao fluxo de câmera desenvolvido na TASK-016.
+- [X] **Passo 5:** Criar a tela de lista `non-conformities.tsx` agrupando ocorrências por nível de gravidade.
+- [X] **Passo 6:** Escrever testes unitários validando as regras condicionais do schema Zod.
 
 ---
 
 ## 6. Critérios de Aceitação (Definition of Done)
-- [ ] **CA-01:** Uma não conformidade cadastrada é gravada em SQLite e listada na inspeção.
-- [ ] **CA-02:** Salvar como `CRITICA` sem foto é bloqueado pela validação visual e de schema.
-- [ ] **CA-03:** A não conformidade é enviada para a fila Outbox para sincronização com o backend.
-- [ ] **CA-04:** `npx tsc --noEmit` executa sem nenhum erro de tipagem.
+- [X] **CA-01:** Uma não conformidade cadastrada é gravada em SQLite e listada na inspeção.
+- [X] **CA-02:** Salvar como `CRITICA` sem foto é bloqueado pela validação visual e de schema.
+- [X] **CA-03:** A não conformidade é enviada para a fila Outbox para sincronização com o backend.
+- [X] **CA-04:** `npx tsc --noEmit` executa sem nenhum erro de tipagem.
 - [ ] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
 ## 7. Registro de Execução & Decisões Técnicas
-*(Preenchido durante o desenvolvimento)*
+- **Passos 1, 2 e 3 (Commit `940117e` & `a41ee38`):**
+  - Definidos tipos, constantes de criticidade (`BAIXA`, `MEDIA`, `ALTA`, `CRITICA`) e mensagens de validação em `mobile/src/features/nonconformity/domain/types.ts`.
+  - Implementado `nonConformitySchema` com `superRefine` em `mobile/src/features/nonconformity/schemas/nonConformitySchema.ts` exigindo descrição detalhada (`>= 10` caracteres) e pelo menos 1 evidência fotográfica para criticidades `ALTA` e `CRITICA` (`RF-04`, `RT-01`, `EX-01`).
+  - Implementado repositório offline-first `NonConformityRepository` em `mobile/src/features/nonconformity/services/nonConformityRepository.ts` com tabela `non_conformities`, geração atômica de mutações na Outbox (`CREATE_NON_CONFORMITY`, `UPDATE_NON_CONFORMITY`, `CANCEL_NON_CONFORMITY`), agrupamento `findGroupedBySeverity` e bloqueio de edições em inspeções concluídas/aprovadas (`EX-02`).
+  - Desenvolvido `NonConformityFormModal.tsx` com seletores de criticidade coloridos, vínculo opcional a item/inspeção, alerta visual `EX-01` e bloqueio do botão de salvar quando falta foto em ocorrência crítica/alta.
+- **Passo 4 — Conexão com Fluxo de Câmera (TASK-016):**
+  - Criado o store efêmero de rascunho `useNonConformityDraftStore` (`mobile/src/features/nonconformity/store/nonConformityDraftStore.ts`) para preservar todos os campos preenchidos no `NonConformityFormModal` durante a navegação até `/(protected)/evidence/capture`.
+  - Atualizados `NonConformityFormModal.tsx` (suporte a `editingNonConformityId` e `preferDraftValues`), `mobile/src/app/(protected)/evidence/capture.tsx` (`returnToNcModal` / `returnRoute`, anexação imediata da foto capturada ao rascunho e retorno com parâmetros) e `mobile/src/app/(protected)/inspections/[inspectionId]/index.tsx` para reabrir automaticamente o modal com a nova fotografia anexada.
+- **Passo 5 — Tela `non-conformities.tsx` Agrupada por Gravidade:**
+  - Criada a rota `mobile/src/app/(protected)/inspections/[inspectionId]/non-conformities.tsx` (registrada em `mobile/src/app/(protected)/inspections/_layout.tsx` e `.expo/types/router.d.ts`) listando ocorrências 100% offline do SQLite agrupadas em ordem decrescente de gravidade (`CRITICA` → `ALTA` → `MEDIA` → `BAIXA`), com KPIs, filtros rápidos por severidade, alternância de canceladas para auditoria (`RT-03`), miniaturas das evidências e fluxo completo de criação/edição/câmera.
+  - Adicionados atalhos de navegação para a lista agrupada em `inspections/[inspectionId]/index.tsx` e `inspections/[inspectionId]/summary.tsx`.
+- **Passo 6 — Testes Unitários & Verificações:**
+  - Criados `mobile/__tests__/features/nonconformity/nonConformitySchema.test.ts` (regras condicionais Zod) e `mobile/__tests__/features/nonconformity/nonConformityFlow.test.ts` (repositório SQLite, Outbox, store de rascunho de câmera e renderização SSR de `NonConformityFormModal` e `non-conformities.tsx`).
+  - `node mobile\node_modules\typescript\bin\tsc -p mobile\tsconfig.json --noEmit` → Exit code `0` (`0` erros de tipagem).
+  - `npm --prefix mobile test` → Exit code `0` (`167/167` testes aprovados em `46` suítes, `0` falhas).

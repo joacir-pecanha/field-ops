@@ -50,3 +50,9 @@ export {
   type NonConformityFormModalProps,
   type NonConformityFormSubmitPayload,
 } from './components/NonConformityFormModal';
+
+export {
+  useNonConformityDraftStore,
+  type NonConformityPendingDraft,
+  type NonConformityReturnRoute,
+} from './store/nonConformityDraftStore';

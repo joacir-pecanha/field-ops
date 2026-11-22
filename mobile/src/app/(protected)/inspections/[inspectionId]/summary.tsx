@@ -23,6 +23,7 @@ import {
   listInspectionEvidences,
   type EvidenceRecord,
 } from '@/features/evidence';
+import { nonConformityRepository } from '@/features/nonconformity';
 import {
   AWAITING_SYNC_LABEL,
   INSPECTION_NOT_FOUND_MESSAGE,
@@ -97,6 +98,7 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
 
   const [richEvidences, setRichEvidences] = useState<EvidenceRecord[]>([]);
   const [deletingEvidenceId, setDeletingEvidenceId] = useState<string | null>(null);
+  const [formalNcCount, setFormalNcCount] = useState<number>(0);
   const displayedEvidences: EvidenceRecord[] = useMemo(
     () => (richEvidences.length > 0 ? richEvidences : evidences),
     [richEvidences, evidences]
@@ -152,10 +154,23 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
     }
   }, [resolvedId, detailsOptions?.initialData]);
 
+  const loadFormalNcCounts = useCallback(async () => {
+    if (!resolvedId || detailsOptions?.initialData) {
+      return;
+    }
+    try {
+      const counts = await nonConformityRepository.countByInspectionId(resolvedId);
+      setFormalNcCount(counts.total);
+    } catch {
+      // Silencioso em SSR/web
+    }
+  }, [resolvedId, detailsOptions?.initialData]);
+
   useEffect(() => {
     void loadLocations();
     void loadRichEvidences();
-  }, [loadLocations, loadRichEvidences]);
+    void loadFormalNcCounts();
+  }, [loadLocations, loadRichEvidences, loadFormalNcCounts]);
 
   useFocusEffect(
     useCallback(() => {
@@ -166,7 +181,8 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
       void reloadLocal();
       void loadLocations();
       void loadRichEvidences();
-    }, [reloadLocal, loadLocations, loadRichEvidences])
+      void loadFormalNcCounts();
+    }, [reloadLocal, loadLocations, loadRichEvidences, loadFormalNcCounts])
   );
 
   useEffect(() => {
@@ -505,17 +521,20 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
             <View
               style={[
                 styles.metricTile,
-                progress.nonConformitiesCount > 0 && styles.metricTileAlert,
+                Math.max(progress.nonConformitiesCount, formalNcCount) > 0 &&
+                  styles.metricTileAlert,
               ]}
             >
               <Text
                 testID="summary-nc-count"
                 style={[
                   styles.metricNumber,
-                  progress.nonConformitiesCount > 0 && { color: tokens.colors.danger },
+                  Math.max(progress.nonConformitiesCount, formalNcCount) > 0 && {
+                    color: tokens.colors.danger,
+                  },
                 ]}
               >
-                {progress.nonConformitiesCount}
+                {Math.max(progress.nonConformitiesCount, formalNcCount)}
               </Text>
               <Text style={styles.metricLabel}>Não Conformidades</Text>
             </View>
@@ -527,6 +546,19 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
               <Text style={styles.metricLabel}>Evidências</Text>
             </View>
           </View>
+
+          <Button
+            testID="summary-view-nonconformities-btn"
+            title="Ver Não Conformidades por Gravidade"
+            variant="secondary"
+            onPress={() =>
+              router.push({
+                pathname: '/(protected)/inspections/[inspectionId]/non-conformities',
+                params: { inspectionId: inspection.id },
+              })
+            }
+            style={styles.pendingBtn}
+          />
 
           {progress.pendingRequiredCount > 0 && !readOnly && (
             <View testID="summary-pending-warning-box" style={styles.pendingWarningBox}>

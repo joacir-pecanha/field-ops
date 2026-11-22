@@ -28,6 +28,7 @@ import { validateNonConformity } from '../schemas/nonConformitySchema';
 
 export interface NonConformityDraftSnapshot {
   inspectionId: string;
+  editingNonConformityId?: string | null;
   itemId: string | null;
   itemTitle: string | null;
   title: string;
@@ -60,6 +61,7 @@ export interface NonConformityFormModalProps {
   initialDescription?: string;
   initialEvidenceUris?: string[];
   initialEvidenceIds?: string[];
+  preferDraftValues?: boolean;
   readOnly?: boolean;
   isSaving?: boolean;
   isDeleting?: boolean;
@@ -108,6 +110,7 @@ export function NonConformityFormModal({
   initialDescription = '',
   initialEvidenceUris = [],
   initialEvidenceIds = [],
+  preferDraftValues = false,
   readOnly = false,
   isSaving = false,
   isDeleting = false,
@@ -118,57 +121,86 @@ export function NonConformityFormModal({
   onAttachPhoto,
   testID = 'non-conformity-form-modal',
 }: NonConformityFormModalProps) {
-  const effectiveItemId = initialNonConformity?.item_id ?? itemId ?? null;
-  const effectiveItemTitle = initialNonConformity?.item_title ?? itemTitle ?? null;
+  const effectiveItemId = preferDraftValues
+    ? itemId ?? null
+    : initialNonConformity?.item_id ?? itemId ?? null;
+  const effectiveItemTitle = preferDraftValues
+    ? itemTitle ?? null
+    : initialNonConformity?.item_title ?? itemTitle ?? null;
 
   const [attachToItem, setAttachToItem] = useState<boolean>(Boolean(effectiveItemId));
   const [title, setTitle] = useState<string>(
-    initialNonConformity?.title ?? initialTitle
+    preferDraftValues ? initialTitle : initialNonConformity?.title ?? initialTitle
   );
   const [description, setDescription] = useState<string>(
-    initialNonConformity?.description ?? initialDescription
+    preferDraftValues
+      ? initialDescription
+      : initialNonConformity?.description ?? initialDescription
   );
   const [severity, setSeverity] = useState<NonConformitySeverity>(
-    initialNonConformity?.severity ?? initialSeverity
+    preferDraftValues
+      ? initialSeverity
+      : initialNonConformity?.severity ?? initialSeverity
   );
   const [evidenceUris, setEvidenceUris] = useState<string[]>(() =>
-    dedupeStrings([
-      ...(initialNonConformity?.evidence_uris ?? []),
-      ...initialEvidenceUris,
-    ])
+    preferDraftValues
+      ? dedupeStrings(initialEvidenceUris)
+      : dedupeStrings([
+          ...(initialNonConformity?.evidence_uris ?? []),
+          ...initialEvidenceUris,
+        ])
   );
   const [evidenceIds, setEvidenceIds] = useState<string[]>(() =>
-    dedupeStrings([
-      ...(initialNonConformity?.evidence_ids ?? []),
-      ...initialEvidenceIds,
-    ])
+    preferDraftValues
+      ? dedupeStrings(initialEvidenceIds)
+      : dedupeStrings([
+          ...(initialNonConformity?.evidence_ids ?? []),
+          ...initialEvidenceIds,
+        ])
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
-    const nextItemId = initialNonConformity?.item_id ?? itemId ?? null;
+    const nextItemId = preferDraftValues
+      ? itemId ?? null
+      : initialNonConformity?.item_id ?? itemId ?? null;
     setAttachToItem(Boolean(nextItemId));
-    setTitle(initialNonConformity?.title ?? initialTitle);
-    setDescription(initialNonConformity?.description ?? initialDescription);
-    setSeverity(initialNonConformity?.severity ?? initialSeverity);
+    setTitle(
+      preferDraftValues ? initialTitle : initialNonConformity?.title ?? initialTitle
+    );
+    setDescription(
+      preferDraftValues
+        ? initialDescription
+        : initialNonConformity?.description ?? initialDescription
+    );
+    setSeverity(
+      preferDraftValues
+        ? initialSeverity
+        : initialNonConformity?.severity ?? initialSeverity
+    );
     setEvidenceUris(
-      dedupeStrings([
-        ...(initialNonConformity?.evidence_uris ?? []),
-        ...initialEvidenceUris,
-      ])
+      preferDraftValues
+        ? dedupeStrings(initialEvidenceUris)
+        : dedupeStrings([
+            ...(initialNonConformity?.evidence_uris ?? []),
+            ...initialEvidenceUris,
+          ])
     );
     setEvidenceIds(
-      dedupeStrings([
-        ...(initialNonConformity?.evidence_ids ?? []),
-        ...initialEvidenceIds,
-      ])
+      preferDraftValues
+        ? dedupeStrings(initialEvidenceIds)
+        : dedupeStrings([
+            ...(initialNonConformity?.evidence_ids ?? []),
+            ...initialEvidenceIds,
+          ])
     );
     setFieldErrors({});
     setSubmitError(null);
   }, [
     visible,
+    preferDraftValues,
     initialNonConformity,
     itemId,
     initialTitle,
@@ -216,6 +248,7 @@ export function NonConformityFormModal({
     if (readOnly || isBusy || !onAttachPhoto) return;
     onAttachPhoto({
       inspectionId,
+      editingNonConformityId: initialNonConformity?.id ?? null,
       itemId: resolvedScopedItemId,
       itemTitle: resolvedScopedItemTitle,
       title,

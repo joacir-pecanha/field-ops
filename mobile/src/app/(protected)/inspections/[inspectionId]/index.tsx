@@ -44,6 +44,7 @@ import {
   NON_CONFORMITY_SEVERITY_META,
   NonConformityFormModal,
   nonConformityRepository,
+  useNonConformityDraftStore,
   type NonConformity,
   type NonConformityDraftSnapshot,
   type NonConformityFormSubmitPayload,
@@ -129,6 +130,9 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     scannedCode?: string;
     divergenceJustified?: string;
     evidenceSaved?: string;
+    restoreNcModal?: string;
+    capturedEvidenceId?: string;
+    capturedEvidenceUri?: string;
   }>();
   const resolvedId = useMemo(() => {
     const raw = propInspectionId ?? params.inspectionId ?? params.id;
@@ -168,11 +172,14 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
   const [ncModalVisible, setNcModalVisible] = useState(false);
   const [ncTargetItem, setNcTargetItem] = useState<ChecklistItem | null>(null);
   const [ncEditingRecord, setNcEditingRecord] = useState<NonConformity | null>(null);
+  const [ncDraftItemId, setNcDraftItemId] = useState<string | null>(null);
+  const [ncDraftItemTitle, setNcDraftItemTitle] = useState<string | null>(null);
   const [ncDraftTitle, setNcDraftTitle] = useState('');
   const [ncDraftDescription, setNcDraftDescription] = useState('');
   const [ncDraftSeverity, setNcDraftSeverity] = useState<NonConformitySeverity>('MEDIA');
   const [ncDraftEvidenceUris, setNcDraftEvidenceUris] = useState<string[]>([]);
   const [ncDraftEvidenceIds, setNcDraftEvidenceIds] = useState<string[]>([]);
+  const [ncPreferDraftValues, setNcPreferDraftValues] = useState(false);
   const [isSavingNc, setIsSavingNc] = useState(false);
   const [isDeletingNc, setIsDeletingNc] = useState(false);
   const [ncModalError, setNcModalError] = useState<string | null>(null);
@@ -292,6 +299,101 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     params.evidenceSaved,
   ]);
 
+  const restoreNcModalFromDraftIfPending = useCallback(() => {
+    const targetInspectionId = inspection?.id ?? resolvedId;
+    if (!targetInspectionId) return;
+
+    const draftState = useNonConformityDraftStore.getState();
+    const pendingDraft = draftState.draftsByInspectionId[targetInspectionId];
+    const shouldRestoreFromParams = params.restoreNcModal === 'true';
+
+    if (!pendingDraft && !shouldRestoreFromParams) {
+      return;
+    }
+
+    if (
+      pendingDraft &&
+      pendingDraft.returnRoute !== 'details' &&
+      !shouldRestoreFromParams
+    ) {
+      return;
+    }
+
+    if (pendingDraft && !pendingDraft.readyToRestore && !shouldRestoreFromParams) {
+      return;
+    }
+
+    const consumed = draftState.consumeDraft(targetInspectionId);
+    const capturedUri = Array.isArray(params.capturedEvidenceUri)
+      ? params.capturedEvidenceUri[0]
+      : params.capturedEvidenceUri;
+    const capturedId = Array.isArray(params.capturedEvidenceId)
+      ? params.capturedEvidenceId[0]
+      : params.capturedEvidenceId;
+
+    const matchedEditingNc = consumed?.editingNonConformityId
+      ? nonConformities.find((nc) => nc.id === consumed.editingNonConformityId) ?? null
+      : null;
+
+    const resolvedItemIdForDraft =
+      consumed?.itemId ?? matchedEditingNc?.item_id ?? params.focusItemId ?? null;
+    const matchedItem = resolvedItemIdForDraft
+      ? items.find((item) => item.id === resolvedItemIdForDraft) ?? null
+      : null;
+
+    const dedupeList = (list: Array<string | null | undefined>) => {
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const entry of list) {
+        const trimmed = typeof entry === 'string' ? entry.trim() : '';
+        if (trimmed && !seen.has(trimmed)) {
+          seen.add(trimmed);
+          out.push(trimmed);
+        }
+      }
+      return out;
+    };
+
+    setNcTargetItem(matchedItem);
+    setNcEditingRecord(matchedEditingNc);
+    setNcDraftItemId(resolvedItemIdForDraft);
+    setNcDraftItemTitle(
+      consumed?.itemTitle ?? matchedItem?.title ?? matchedEditingNc?.item_title ?? null
+    );
+    setNcDraftTitle(consumed?.title ?? matchedEditingNc?.title ?? '');
+    setNcDraftDescription(consumed?.description ?? matchedEditingNc?.description ?? '');
+    setNcDraftSeverity(consumed?.severity ?? matchedEditingNc?.severity ?? 'MEDIA');
+    setNcDraftEvidenceUris(
+      dedupeList([
+        ...(consumed?.evidenceUris ?? matchedEditingNc?.evidence_uris ?? []),
+        capturedUri,
+      ])
+    );
+    setNcDraftEvidenceIds(
+      dedupeList([
+        ...(consumed?.evidenceIds ?? matchedEditingNc?.evidence_ids ?? []),
+        capturedId,
+      ])
+    );
+    setNcPreferDraftValues(true);
+    setNcModalError(null);
+    setIsChecklistInteractive(true);
+    setNcModalVisible(true);
+  }, [
+    inspection?.id,
+    resolvedId,
+    params.restoreNcModal,
+    params.capturedEvidenceUri,
+    params.capturedEvidenceId,
+    params.focusItemId,
+    nonConformities,
+    items,
+  ]);
+
+  useEffect(() => {
+    restoreNcModalFromDraftIfPending();
+  }, [restoreNcModalFromDraftIfPending]);
+
   useFocusEffect(
     useCallback(() => {
       if (isFirstFocusRef.current) {
@@ -302,7 +404,14 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       void loadLocations();
       void loadRichEvidences();
       void loadNonConformities();
-    }, [reloadLocal, loadLocations, loadRichEvidences, loadNonConformities])
+      restoreNcModalFromDraftIfPending();
+    }, [
+      reloadLocal,
+      loadLocations,
+      loadRichEvidences,
+      loadNonConformities,
+      restoreNcModalFromDraftIfPending,
+    ])
   );
 
   // Captura GPS pontual de início automaticamente ao retornar do scanner com QR validado (RF-02, CA-04)
@@ -425,6 +534,8 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
 
       setNcTargetItem(targetItem);
       setNcEditingRecord(existingNc);
+      setNcDraftItemId(targetItem?.id ?? existingNc?.item_id ?? null);
+      setNcDraftItemTitle(targetItem?.title ?? existingNc?.item_title ?? null);
       setNcDraftTitle(
         existingNc?.title ??
           (targetItem ? `Não conformidade: ${targetItem.title}` : '')
@@ -435,6 +546,7 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       setNcDraftSeverity(existingNc?.severity ?? 'MEDIA');
       setNcDraftEvidenceUris(mergedUris);
       setNcDraftEvidenceIds(mergedIds);
+      setNcPreferDraftValues(false);
       setNcModalError(null);
       setNcModalVisible(true);
     },
@@ -465,9 +577,11 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
           return;
         }
 
+        useNonConformityDraftStore.getState().clearDraft(inspection.id);
         await loadNonConformities();
         await reloadLocal();
         setNcModalVisible(false);
+        setNcPreferDraftValues(false);
         setActionFeedback({
           type: 'success',
           text: result.message,
@@ -495,9 +609,11 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
           return;
         }
 
+        useNonConformityDraftStore.getState().clearDraft(inspection.id);
         await loadNonConformities();
         await reloadLocal();
         setNcModalVisible(false);
+        setNcPreferDraftValues(false);
         setActionFeedback({
           type: 'info',
           text: result.message,
@@ -512,6 +628,19 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
   const handleAttachPhotoFromNcModal = useCallback(
     (draft: NonConformityDraftSnapshot) => {
       if (!inspection) return;
+      useNonConformityDraftStore.getState().saveDraft({
+        inspectionId: inspection.id,
+        editingNonConformityId:
+          draft.editingNonConformityId ?? ncEditingRecord?.id ?? null,
+        itemId: draft.itemId,
+        itemTitle: draft.itemTitle,
+        title: draft.title,
+        description: draft.description,
+        severity: draft.severity,
+        evidenceUris: draft.evidenceUris,
+        evidenceIds: draft.evidenceIds,
+        returnRoute: 'details',
+      });
       setNcModalVisible(false);
       router.push({
         pathname: '/(protected)/evidence/capture',
@@ -519,8 +648,15 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
           inspectionId: inspection.id,
           ...(draft.itemId ? { itemId: draft.itemId } : {}),
           ...(draft.itemTitle ? { itemTitle: draft.itemTitle } : {}),
-          ...(ncEditingRecord?.id ? { nonConformityId: ncEditingRecord.id } : {}),
+          ...(draft.editingNonConformityId || ncEditingRecord?.id
+            ? {
+                nonConformityId:
+                  draft.editingNonConformityId ?? ncEditingRecord?.id ?? '',
+              }
+            : {}),
           isNonConformity: 'true',
+          returnToNcModal: 'true',
+          returnRoute: 'details',
         },
       });
     },
@@ -1417,6 +1553,24 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
                   Não Conformidades ({nonConformities.length})
                 </Text>
               </View>
+              <TouchableOpacity
+                testID="details-view-nonconformities-btn"
+                style={styles.ncViewAllChip}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(protected)/inspections/[inspectionId]/non-conformities',
+                    params: { inspectionId: inspection.id },
+                  })
+                }
+                accessibilityRole="button"
+              >
+                <Text style={styles.ncViewAllChipText}>Agrupar por Gravidade</Text>
+                <MaterialIcons
+                  name="chevron-right"
+                  size={16}
+                  color={tokens.colors.primary}
+                />
+              </TouchableOpacity>
             </View>
 
             {nonConformities.length === 0 ? (
@@ -1526,20 +1680,25 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       <NonConformityFormModal
         visible={ncModalVisible}
         inspectionId={inspection.id}
-        itemId={ncTargetItem?.id ?? ncEditingRecord?.item_id ?? null}
-        itemTitle={ncTargetItem?.title ?? ncEditingRecord?.item_title ?? null}
+        itemId={ncTargetItem?.id ?? ncDraftItemId ?? ncEditingRecord?.item_id ?? null}
+        itemTitle={
+          ncTargetItem?.title ?? ncDraftItemTitle ?? ncEditingRecord?.item_title ?? null
+        }
         initialNonConformity={ncEditingRecord}
         initialTitle={ncDraftTitle}
         initialDescription={ncDraftDescription}
         initialSeverity={ncDraftSeverity}
         initialEvidenceUris={ncDraftEvidenceUris}
         initialEvidenceIds={ncDraftEvidenceIds}
+        preferDraftValues={ncPreferDraftValues}
         readOnly={isReadOnlyInspection}
         isSaving={isSavingNc}
         isDeleting={isDeletingNc}
         errorMessage={ncModalError}
         onClose={() => {
+          useNonConformityDraftStore.getState().clearDraft(inspection.id);
           setNcModalVisible(false);
+          setNcPreferDraftValues(false);
           setNcModalError(null);
         }}
         onSubmit={handleSaveNonConformity}
@@ -2076,6 +2235,23 @@ const styles = StyleSheet.create({
   },
   addNcFooterBtn: {
     marginTop: tokens.spacing.xs,
+  },
+  ncViewAllChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: tokens.spacing.s,
+  },
+  ncViewAllChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: tokens.colors.primary,
   },
   summaryFooterBtn: {
     marginTop: tokens.spacing.s,
