@@ -150,6 +150,20 @@ export const routes: Routes = [
         title: 'Agendar Inspeção — FieldOps Admin',
       },
       {
+        path: 'inspections/:inspectionId/review',
+        loadComponent: () =>
+          import('./pages/inspections/inspection-review.component').then(
+            (m) => m.InspectionReviewComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Revisão Técnica da Inspeção — FieldOps Admin',
+      },
+      {
+        path: 'inspections/:inspectionId',
+        redirectTo: 'inspections/:inspectionId/review',
+        pathMatch: 'full',
+      },
+      {
         path: 'non-conformities',
         component: ModulePlaceholderComponent,
         data: {

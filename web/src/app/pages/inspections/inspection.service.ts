@@ -25,6 +25,14 @@ export type InspectionPriority = 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE' | 'CRITI
 
 export type InspectionStatusTone = 'blue' | 'orange' | 'yellow' | 'green' | 'red' | 'gray';
 
+export type NonConformitySeverity = 'BAIXA' | 'MEDIA' | 'ALTA' | 'CRITICA';
+
+export type NonConformityStatus = 'OPEN' | 'RESOLVED' | 'CANCELED';
+
+export type InspectionReviewDecision = 'REVIEW_STARTED' | 'APPROVED' | 'REJECTED';
+
+export type EvidenceFileStatus = 'PENDING' | 'UPLOADED' | 'FAILED' | 'DELETED';
+
 export interface InspectionStatusOption {
   value: InspectionStatus;
   label: string;
@@ -92,6 +100,105 @@ export interface AuditLogResponse {
   occurredAt: string;
 }
 
+export interface InspectionResponseReviewDto {
+  id: string;
+  inspectionId: string;
+  inspectionItemId: string;
+  valueRaw: string | null;
+  valueText: string | null;
+  valueNumber: number | null;
+  valueBoolean: boolean | null;
+  valueDate: string | null;
+  valueJson: string | null;
+  observation: string | null;
+  conformity: string | null;
+  nonConformity: boolean;
+  nonConformityDescription: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: number | null;
+  answeredBy: string | null;
+  answeredAtDevice: string | null;
+  serverReceivedAt: string | null;
+  adminAdjusted: boolean;
+  adminAdjustedValue: string | null;
+  adminAdjustmentReason: string | null;
+  adminAdjustedBy: string | null;
+  adminAdjustedByName: string | null;
+  adminAdjustedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number | null;
+}
+
+export interface InspectionNonConformityDto {
+  id: string;
+  inspectionId: string;
+  inspectionItemId: string | null;
+  responseId: string | null;
+  itemTitle: string | null;
+  title: string;
+  description: string | null;
+  severity: NonConformitySeverity;
+  status: NonConformityStatus;
+  canceledReason: string | null;
+  createdBy: string | null;
+  createdAtDevice: string | null;
+  serverReceivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number | null;
+}
+
+export interface InspectionEvidenceDto {
+  evidence_id?: string;
+  evidenceId?: string;
+  id?: string;
+  operation_id?: string | null;
+  operationId?: string | null;
+  inspection_id?: string;
+  inspectionId?: string;
+  inspection_item_id?: string | null;
+  inspectionItemId?: string | null;
+  response_id?: string | null;
+  responseId?: string | null;
+  non_conformity_id?: string | null;
+  nonConformityId?: string | null;
+  file_name?: string | null;
+  fileName?: string | null;
+  original_file_name?: string | null;
+  originalFileName?: string | null;
+  storage_key?: string | null;
+  storageKey?: string | null;
+  mime_type?: string | null;
+  mimeType?: string | null;
+  size_bytes?: number | null;
+  sizeBytes?: number | null;
+  checksum_sha256?: string | null;
+  checksumSha256?: string | null;
+  status?: EvidenceFileStatus;
+  client_timestamp?: string | null;
+  clientTimestamp?: string | null;
+  server_timestamp?: string | null;
+  serverTimestamp?: string | null;
+  uploaded_at?: string | null;
+  uploadedAt?: string | null;
+  url?: string | null;
+}
+
+export interface InspectionReviewHistoryDto {
+  id: string;
+  inspectionId: string;
+  reviewerId: string;
+  reviewerName: string | null;
+  decision: InspectionReviewDecision;
+  reason: string | null;
+  comments: string | null;
+  reviewedAt: string;
+  reviewCycle: number | null;
+  createdAt: string;
+}
+
 export interface InspectionDetailsResponse {
   id: string;
   title: string;
@@ -129,12 +236,33 @@ export interface InspectionDetailsResponse {
   startedAtServer: string | null;
   completedAtDevice: string | null;
   submittedAtServer: string | null;
+  reviewStartedAt?: string | null;
+  reviewStartedBy?: string | null;
   approvedAt: string | null;
+  approvedBy?: string | null;
+  approvedByName?: string | null;
+  reviewComments?: string | null;
+  rejectedAt?: string | null;
+  rejectedBy?: string | null;
+  rejectedByName?: string | null;
+  rejectionReason?: string | null;
+  rejection_reason?: string | null;
+  reviewCycle?: number | null;
+  startLatitude?: number | null;
+  startLongitude?: number | null;
+  startAccuracy?: number | null;
+  completeLatitude?: number | null;
+  completeLongitude?: number | null;
+  completeAccuracy?: number | null;
   canceledAt: string | null;
   canceledBy: string | null;
   canceledReason: string | null;
   totalItems: number;
   items: InspectionItemSnapshotResponse[];
+  responses?: InspectionResponseReviewDto[];
+  nonConformities?: InspectionNonConformityDto[];
+  evidences?: InspectionEvidenceDto[];
+  reviews?: InspectionReviewHistoryDto[];
   createdAt: string;
   updatedAt: string;
   version: number;
@@ -159,6 +287,18 @@ export interface CancelInspectionRequest {
   reason: string;
   justification?: string | null;
   canceledReason?: string | null;
+}
+
+export interface ApproveInspectionRequest {
+  comments?: string | null;
+  reviewComments?: string | null;
+}
+
+export interface RejectInspectionRequest {
+  rejection_reason: string;
+  rejectionReason?: string | null;
+  reason?: string | null;
+  comments?: string | null;
 }
 
 export interface InspectionListQuery extends PageQuery {
@@ -253,13 +393,117 @@ export function canCancelInspection(status: InspectionStatus | null | undefined)
   return status !== 'APROVADA' && status !== 'CANCELADA';
 }
 
+export function isInspectionActionLocked(status: InspectionStatus | null | undefined): boolean {
+  return status === 'APROVADA' || status === 'CANCELADA';
+}
+
+export function canStartInspectionReview(status: InspectionStatus | null | undefined): boolean {
+  return status === 'ENVIADA';
+}
+
+export function canSubmitInspectionVerdict(status: InspectionStatus | null | undefined): boolean {
+  return status === 'ENVIADA' || status === 'EM_REVISÃO';
+}
+
+export const NON_CONFORMITY_SEVERITY_WEIGHT: Record<NonConformitySeverity, number> = {
+  CRITICA: 4,
+  ALTA: 3,
+  MEDIA: 2,
+  BAIXA: 1,
+};
+
+export function sortNonConformitiesBySeverity(
+  items: readonly InspectionNonConformityDto[]
+): InspectionNonConformityDto[] {
+  return [...items].sort((a, b) => {
+    const weightA = NON_CONFORMITY_SEVERITY_WEIGHT[a.severity] ?? 0;
+    const weightB = NON_CONFORMITY_SEVERITY_WEIGHT[b.severity] ?? 0;
+    if (weightB !== weightA) {
+      return weightB - weightA;
+    }
+    return (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
+  });
+}
+
+export function getNonConformitySeverityLabel(
+  severity: NonConformitySeverity | string | null | undefined
+): string {
+  switch (severity) {
+    case 'CRITICA':
+      return 'Crítica';
+    case 'ALTA':
+      return 'Alta';
+    case 'MEDIA':
+      return 'Média';
+    case 'BAIXA':
+      return 'Baixa';
+    default:
+      return severity ?? '—';
+  }
+}
+
+export function getNonConformitySeverityTone(
+  severity: NonConformitySeverity | string | null | undefined
+): 'critical' | 'high' | 'medium' | 'low' {
+  switch (severity) {
+    case 'CRITICA':
+      return 'critical';
+    case 'ALTA':
+      return 'high';
+    case 'MEDIA':
+      return 'medium';
+    default:
+      return 'low';
+  }
+}
+
+export function resolveEvidenceId(evidence: InspectionEvidenceDto): string {
+  return evidence.evidence_id ?? evidence.evidenceId ?? evidence.id ?? '';
+}
+
+export function resolveEvidenceItemId(evidence: InspectionEvidenceDto): string | null {
+  return evidence.inspection_item_id ?? evidence.inspectionItemId ?? null;
+}
+
+export function resolveEvidenceResponseId(evidence: InspectionEvidenceDto): string | null {
+  return evidence.response_id ?? evidence.responseId ?? null;
+}
+
+export function resolveEvidenceNonConformityId(evidence: InspectionEvidenceDto): string | null {
+  return evidence.non_conformity_id ?? evidence.nonConformityId ?? null;
+}
+
+export function resolveEvidenceFileName(evidence: InspectionEvidenceDto): string {
+  return (
+    (evidence.original_file_name ??
+      evidence.originalFileName ??
+      evidence.file_name ??
+      evidence.fileName ??
+      resolveEvidenceId(evidence)) ||
+    'evidencia.jpg'
+  );
+}
+
+export function getEvidenceImageUrl(evidence: InspectionEvidenceDto): string {
+  if (evidence.url && evidence.url.trim().length > 0) {
+    return evidence.url.trim();
+  }
+  const id = resolveEvidenceId(evidence);
+  if (!id) {
+    return '';
+  }
+  const apiBase = environment.apiBaseUrl.replace(/\/+$/, '');
+  return `${apiBase}/api/v1/sync/evidences/${encodeURIComponent(id)}/content`;
+}
+
 /**
- * Serviço HTTP tipado para Agendamento, Acompanhamento e Cancelamento de Inspeções (TASK-012 Passo 1).
+ * Serviço HTTP tipado para Agendamento, Acompanhamento, Cancelamento e Revisão Técnica de Inspeções (TASK-012 / TASK-020).
  */
 @Injectable({ providedIn: 'root' })
 export class InspectionService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.apiBaseUrl.replace(/\/+$/, '')}/api/v1/inspections`;
+  private readonly apiBaseUrl = environment.apiBaseUrl.replace(/\/+$/, '');
+  private readonly baseUrl = `${this.apiBaseUrl}/api/v1/inspections`;
 
   list(query?: InspectionListQuery): Observable<PageResponse<InspectionDetailsResponse>> {
     const params = buildHttpParams(query as Record<string, unknown> | undefined);
@@ -293,6 +537,37 @@ export class InspectionService {
       .pipe(catchError((err) => throwError(() => mapInspectionHttpError(err))));
   }
 
+  getReviewDetails(id: string): Observable<InspectionDetailsResponse> {
+    return this.getById(id);
+  }
+
+  startReview(id: string): Observable<InspectionDetailsResponse> {
+    return this.http
+      .post<InspectionDetailsResponse>(`${this.baseUrl}/${encodeURIComponent(id)}/start-review`, {})
+      .pipe(catchError((err) => throwError(() => mapInspectionHttpError(err))));
+  }
+
+  approve(id: string, payload?: ApproveInspectionRequest): Observable<InspectionDetailsResponse> {
+    return this.http
+      .post<InspectionDetailsResponse>(
+        `${this.baseUrl}/${encodeURIComponent(id)}/approve`,
+        payload ?? {}
+      )
+      .pipe(catchError((err) => throwError(() => mapInspectionHttpError(err))));
+  }
+
+  reject(id: string, payload: RejectInspectionRequest): Observable<InspectionDetailsResponse> {
+    return this.http
+      .post<InspectionDetailsResponse>(`${this.baseUrl}/${encodeURIComponent(id)}/reject`, payload)
+      .pipe(catchError((err) => throwError(() => mapInspectionHttpError(err))));
+  }
+
+  getReviewHistory(id: string): Observable<InspectionReviewHistoryDto[]> {
+    return this.http
+      .get<InspectionReviewHistoryDto[]>(`${this.baseUrl}/${encodeURIComponent(id)}/reviews`)
+      .pipe(catchError((err) => throwError(() => mapInspectionHttpError(err))));
+  }
+
   getSnapshots(id: string): Observable<InspectionItemSnapshotResponse[]> {
     return this.http
       .get<InspectionItemSnapshotResponse[]>(`${this.baseUrl}/${encodeURIComponent(id)}/snapshots`)
@@ -302,6 +577,16 @@ export class InspectionService {
   getAuditLogs(id: string): Observable<AuditLogResponse[]> {
     return this.http
       .get<AuditLogResponse[]>(`${this.baseUrl}/${encodeURIComponent(id)}/audit-logs`)
+      .pipe(catchError((err) => throwError(() => mapInspectionHttpError(err))));
+  }
+
+  getEvidenceContentUrl(evidenceId: string): string {
+    return `${this.apiBaseUrl}/api/v1/sync/evidences/${encodeURIComponent(evidenceId)}/content`;
+  }
+
+  getEvidenceBlob(evidenceId: string): Observable<Blob> {
+    return this.http
+      .get(this.getEvidenceContentUrl(evidenceId), { responseType: 'blob' })
       .pipe(catchError((err) => throwError(() => mapInspectionHttpError(err))));
   }
 }
