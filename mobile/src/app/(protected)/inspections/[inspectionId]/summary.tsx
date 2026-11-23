@@ -186,7 +186,22 @@ export default function InspectionSummaryScreen(props: InspectionSummaryScreenPr
   );
 
   useEffect(() => {
-    setBlockedPendingItems(progress.pendingRequiredItems);
+    setBlockedPendingItems((prev) => {
+      if (prev.length === 0 && progress.pendingRequiredItems.length === 0) {
+        return prev;
+      }
+      if (
+        prev.length === progress.pendingRequiredItems.length &&
+        prev.every(
+          (entry, idx) =>
+            entry.itemId === progress.pendingRequiredItems[idx]?.itemId &&
+            entry.reason === progress.pendingRequiredItems[idx]?.reason
+        )
+      ) {
+        return prev;
+      }
+      return progress.pendingRequiredItems;
+    });
   }, [progress.pendingRequiredItems]);
 
   const readOnly = Boolean(

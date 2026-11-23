@@ -97,6 +97,12 @@ const DEFAULT_PROGRESS: InspectionDetailsData['progress'] = {
   percentage: 0,
 };
 
+const EMPTY_SECTIONS: ChecklistSection[] = [];
+const EMPTY_ITEMS: ChecklistItem[] = [];
+const EMPTY_RESPONSES: ChecklistResponse[] = [];
+const EMPTY_EVIDENCES: InspectionEvidence[] = [];
+const EMPTY_OPERATIONS: OutboxOperation[] = [];
+
 function isPrivilegedUserRole(userRole?: string | null): boolean {
   const normalized = String(userRole ?? '').trim().toUpperCase();
   return normalized === 'ADMIN' || normalized === 'SUPERVISOR';
@@ -459,11 +465,11 @@ export function useInspectionDetails(
     [details?.action, inspection?.status]
   );
 
-  const sections: ChecklistSection[] = details?.sections ?? [];
-  const items: ChecklistItem[] = details?.items ?? [];
-  const responses: ChecklistResponse[] = details?.responses ?? [];
-  const evidences: InspectionEvidence[] = details?.evidences ?? [];
-  const pendingOperations: OutboxOperation[] = details?.pendingOperations ?? [];
+  const sections: ChecklistSection[] = details?.sections ?? EMPTY_SECTIONS;
+  const items: ChecklistItem[] = details?.items ?? EMPTY_ITEMS;
+  const responses: ChecklistResponse[] = details?.responses ?? EMPTY_RESPONSES;
+  const evidences: InspectionEvidence[] = details?.evidences ?? EMPTY_EVIDENCES;
+  const pendingOperations: OutboxOperation[] = details?.pendingOperations ?? EMPTY_OPERATIONS;
 
   return {
     details,

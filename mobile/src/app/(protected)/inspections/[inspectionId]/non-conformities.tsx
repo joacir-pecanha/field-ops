@@ -204,6 +204,8 @@ export default function NonConformitiesScreen(props: NonConformitiesScreenProps)
     () => groups.flatMap((group) => group.items),
     [groups]
   );
+  const allItemsFlatRef = useRef(allItemsFlat);
+  allItemsFlatRef.current = allItemsFlat;
 
   const restoreDraftIfPending = useCallback(() => {
     const targetInspectionId = inspection?.id ?? resolvedId;
@@ -238,7 +240,7 @@ export default function NonConformitiesScreen(props: NonConformitiesScreenProps)
       : params.capturedEvidenceId;
 
     const editingMatch = consumed?.editingNonConformityId
-      ? allItemsFlat.find((nc) => nc.id === consumed.editingNonConformityId) ?? null
+      ? allItemsFlatRef.current.find((nc) => nc.id === consumed.editingNonConformityId) ?? null
       : null;
 
     setNcEditingRecord(editingMatch);
@@ -276,8 +278,10 @@ export default function NonConformitiesScreen(props: NonConformitiesScreenProps)
     params.evidenceSaved,
     params.capturedEvidenceUri,
     params.capturedEvidenceId,
-    allItemsFlat,
   ]);
+
+  const restoreDraftIfPendingRef = useRef(restoreDraftIfPending);
+  restoreDraftIfPendingRef.current = restoreDraftIfPending;
 
   useEffect(() => {
     restoreDraftIfPending();
@@ -291,8 +295,8 @@ export default function NonConformitiesScreen(props: NonConformitiesScreenProps)
       }
       reloadLocal();
       void loadGroupedOccurrences();
-      restoreDraftIfPending();
-    }, [reloadLocal, loadGroupedOccurrences, restoreDraftIfPending])
+      restoreDraftIfPendingRef.current();
+    }, [reloadLocal, loadGroupedOccurrences])
   );
 
   const isReadOnlyInspection = Boolean(

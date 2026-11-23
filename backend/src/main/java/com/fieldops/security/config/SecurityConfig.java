@@ -129,7 +129,9 @@ public class SecurityConfig {
                 HttpHeaders.CONTENT_TYPE,
                 HttpHeaders.ACCEPT,
                 "X-Request-Id",
-                "X-Correlation-Id"
+                "X-Correlation-Id",
+                "X-Idempotency-Key",
+                "X-Batch-Id"
         ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

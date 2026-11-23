@@ -23,6 +23,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -126,6 +127,24 @@ public class Inspection {
 
     @Column(name = "canceled_reason", length = 1000)
     private String canceledReason;
+
+    @Column(name = "start_latitude", precision = 10, scale = 7)
+    private BigDecimal startLatitude;
+
+    @Column(name = "start_longitude", precision = 10, scale = 7)
+    private BigDecimal startLongitude;
+
+    @Column(name = "start_accuracy", precision = 10, scale = 2)
+    private BigDecimal startAccuracy;
+
+    @Column(name = "complete_latitude", precision = 10, scale = 7)
+    private BigDecimal completeLatitude;
+
+    @Column(name = "complete_longitude", precision = 10, scale = 7)
+    private BigDecimal completeLongitude;
+
+    @Column(name = "complete_accuracy", precision = 10, scale = 2)
+    private BigDecimal completeAccuracy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -391,5 +410,53 @@ public class Inspection {
 
     public void setItemSnapshots(List<InspectionItemSnapshot> itemSnapshots) {
         this.itemSnapshots = itemSnapshots;
+    }
+
+    public BigDecimal getStartLatitude() {
+        return startLatitude;
+    }
+
+    public void setStartLatitude(BigDecimal startLatitude) {
+        this.startLatitude = startLatitude;
+    }
+
+    public BigDecimal getStartLongitude() {
+        return startLongitude;
+    }
+
+    public void setStartLongitude(BigDecimal startLongitude) {
+        this.startLongitude = startLongitude;
+    }
+
+    public BigDecimal getStartAccuracy() {
+        return startAccuracy;
+    }
+
+    public void setStartAccuracy(BigDecimal startAccuracy) {
+        this.startAccuracy = startAccuracy;
+    }
+
+    public BigDecimal getCompleteLatitude() {
+        return completeLatitude;
+    }
+
+    public void setCompleteLatitude(BigDecimal completeLatitude) {
+        this.completeLatitude = completeLatitude;
+    }
+
+    public BigDecimal getCompleteLongitude() {
+        return completeLongitude;
+    }
+
+    public void setCompleteLongitude(BigDecimal completeLongitude) {
+        this.completeLongitude = completeLongitude;
+    }
+
+    public BigDecimal getCompleteAccuracy() {
+        return completeAccuracy;
+    }
+
+    public void setCompleteAccuracy(BigDecimal completeAccuracy) {
+        this.completeAccuracy = completeAccuracy;
     }
 }

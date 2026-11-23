@@ -299,6 +299,11 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     params.evidenceSaved,
   ]);
 
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const nonConformitiesRef = useRef(nonConformities);
+  nonConformitiesRef.current = nonConformities;
+
   const restoreNcModalFromDraftIfPending = useCallback(() => {
     const targetInspectionId = inspection?.id ?? resolvedId;
     if (!targetInspectionId) return;
@@ -332,13 +337,13 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       : params.capturedEvidenceId;
 
     const matchedEditingNc = consumed?.editingNonConformityId
-      ? nonConformities.find((nc) => nc.id === consumed.editingNonConformityId) ?? null
+      ? nonConformitiesRef.current.find((nc) => nc.id === consumed.editingNonConformityId) ?? null
       : null;
 
     const resolvedItemIdForDraft =
       consumed?.itemId ?? matchedEditingNc?.item_id ?? params.focusItemId ?? null;
     const matchedItem = resolvedItemIdForDraft
-      ? items.find((item) => item.id === resolvedItemIdForDraft) ?? null
+      ? itemsRef.current.find((item) => item.id === resolvedItemIdForDraft) ?? null
       : null;
 
     const dedupeList = (list: Array<string | null | undefined>) => {
@@ -386,13 +391,24 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
     params.capturedEvidenceUri,
     params.capturedEvidenceId,
     params.focusItemId,
-    nonConformities,
-    items,
   ]);
+
+  const restoreNcModalFromDraftIfPendingRef = useRef(restoreNcModalFromDraftIfPending);
+  restoreNcModalFromDraftIfPendingRef.current = restoreNcModalFromDraftIfPending;
 
   useEffect(() => {
     restoreNcModalFromDraftIfPending();
   }, [restoreNcModalFromDraftIfPending]);
+
+  useEffect(() => {
+    if (!ncModalVisible || ncTargetItem || !ncDraftItemId) {
+      return;
+    }
+    const matchedItem = items.find((item) => item.id === ncDraftItemId) ?? null;
+    if (matchedItem) {
+      setNcTargetItem(matchedItem);
+    }
+  }, [ncModalVisible, ncTargetItem, ncDraftItemId, items]);
 
   useFocusEffect(
     useCallback(() => {
@@ -404,14 +420,8 @@ export default function InspectionDetailsScreen(props: InspectionDetailsScreenPr
       void loadLocations();
       void loadRichEvidences();
       void loadNonConformities();
-      restoreNcModalFromDraftIfPending();
-    }, [
-      reloadLocal,
-      loadLocations,
-      loadRichEvidences,
-      loadNonConformities,
-      restoreNcModalFromDraftIfPending,
-    ])
+      restoreNcModalFromDraftIfPendingRef.current();
+    }, [reloadLocal, loadLocations, loadRichEvidences, loadNonConformities])
   );
 
   // Captura GPS pontual de início automaticamente ao retornar do scanner com QR validado (RF-02, CA-04)
