@@ -8,7 +8,7 @@
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/fluxo_geral.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/fluxo_geral.md), [docs/regras-de-negocio.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/regras-de-negocio.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** 2026-11-26
+- **Data de Conclusão:** 2026-11-22
 
 ---
 
