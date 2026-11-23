@@ -65,7 +65,7 @@ A sincronização é o elemento central da arquitetura offline-first do FieldOps
 - [x] **CA-02:** Reenviar o mesmo lote exatamente igual retorna status `SUCCESS` sem criar registros duplicados no PostgreSQL.
 - [x] **CA-03:** Falha em uma operação individual não compromete as operações anteriores que foram bem-sucedidas.
 - [x] **CA-04:** Fotos são salvas em armazenamento de objetos/disco e vinculadas às respostas no banco.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
