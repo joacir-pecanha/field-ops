@@ -82,6 +82,7 @@ public class InspectionSchedulingService {
     private final InspectionTemplateRepository templateRepository;
     private final TemplateVersionRepository templateVersionRepository;
     private final TemplateSnapshotService templateSnapshotService;
+    private final InspectionDetailsAssembler inspectionDetailsAssembler;
 
     public InspectionSchedulingService(
             InspectionRepository inspectionRepository,
@@ -93,7 +94,8 @@ public class InspectionSchedulingService {
             UserRepository userRepository,
             InspectionTemplateRepository templateRepository,
             TemplateVersionRepository templateVersionRepository,
-            TemplateSnapshotService templateSnapshotService
+            TemplateSnapshotService templateSnapshotService,
+            InspectionDetailsAssembler inspectionDetailsAssembler
     ) {
         this.inspectionRepository = inspectionRepository;
         this.snapshotRepository = snapshotRepository;
@@ -105,6 +107,7 @@ public class InspectionSchedulingService {
         this.templateRepository = templateRepository;
         this.templateVersionRepository = templateVersionRepository;
         this.templateSnapshotService = templateSnapshotService;
+        this.inspectionDetailsAssembler = inspectionDetailsAssembler;
     }
 
     /**
@@ -391,10 +394,15 @@ public class InspectionSchedulingService {
         }
 
         return inspections.stream()
-                .map(inspection -> InspectionDetailsResponse.fromEntity(
-                        inspection,
-                        groupedSnapshots.getOrDefault(inspection.getId(), List.of())
-                ))
+                .map(inspection -> {
+                    if (inspection.getStatus() == InspectionStatus.REPROVADA) {
+                        return inspectionDetailsAssembler.assembleDetailed(inspection);
+                    }
+                    return InspectionDetailsResponse.fromEntity(
+                            inspection,
+                            groupedSnapshots.getOrDefault(inspection.getId(), List.of())
+                    );
+                })
                 .toList();
     }
 
@@ -472,9 +480,7 @@ public class InspectionSchedulingService {
     @Transactional(readOnly = true)
     public InspectionDetailsResponse getById(UUID id, AuthenticatedUser actor) {
         Inspection inspection = findDetailedAndAuthorize(id, actor);
-        List<InspectionItemSnapshot> snapshots = snapshotRepository
-                .findByInspectionIdOrderBySectionOrderAscItemOrderAsc(inspection.getId());
-        return InspectionDetailsResponse.fromEntity(inspection, snapshots);
+        return inspectionDetailsAssembler.assembleDetailed(inspection);
     }
 
     @Transactional(readOnly = true)

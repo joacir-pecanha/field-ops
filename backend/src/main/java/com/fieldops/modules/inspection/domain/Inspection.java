@@ -116,8 +116,32 @@ public class Inspection {
     @Column(name = "submitted_at_server")
     private Instant submittedAtServer;
 
+    @Column(name = "review_started_at")
+    private Instant reviewStartedAt;
+
+    @Column(name = "review_started_by")
+    private UUID reviewStartedBy;
+
     @Column(name = "approved_at")
     private Instant approvedAt;
+
+    @Column(name = "approved_by")
+    private UUID approvedBy;
+
+    @Column(name = "review_comments", length = 2000)
+    private String reviewComments;
+
+    @Column(name = "rejected_at")
+    private Instant rejectedAt;
+
+    @Column(name = "rejected_by")
+    private UUID rejectedBy;
+
+    @Column(name = "rejection_reason", length = 2000)
+    private String rejectionReason;
+
+    @Column(name = "review_cycle", nullable = false)
+    private Integer reviewCycle = 0;
 
     @Column(name = "canceled_at")
     private Instant canceledAt;
@@ -183,6 +207,9 @@ public class Inspection {
         }
         if (this.status == null) {
             this.status = InspectionStatus.ATRIBUÍDA;
+        }
+        if (this.reviewCycle == null) {
+            this.reviewCycle = 0;
         }
     }
 
@@ -348,12 +375,76 @@ public class Inspection {
         this.submittedAtServer = submittedAtServer;
     }
 
+    public Instant getReviewStartedAt() {
+        return reviewStartedAt;
+    }
+
+    public void setReviewStartedAt(Instant reviewStartedAt) {
+        this.reviewStartedAt = reviewStartedAt;
+    }
+
+    public UUID getReviewStartedBy() {
+        return reviewStartedBy;
+    }
+
+    public void setReviewStartedBy(UUID reviewStartedBy) {
+        this.reviewStartedBy = reviewStartedBy;
+    }
+
     public Instant getApprovedAt() {
         return approvedAt;
     }
 
     public void setApprovedAt(Instant approvedAt) {
         this.approvedAt = approvedAt;
+    }
+
+    public UUID getApprovedBy() {
+        return approvedBy;
+    }
+
+    public void setApprovedBy(UUID approvedBy) {
+        this.approvedBy = approvedBy;
+    }
+
+    public String getReviewComments() {
+        return reviewComments;
+    }
+
+    public void setReviewComments(String reviewComments) {
+        this.reviewComments = reviewComments;
+    }
+
+    public Instant getRejectedAt() {
+        return rejectedAt;
+    }
+
+    public void setRejectedAt(Instant rejectedAt) {
+        this.rejectedAt = rejectedAt;
+    }
+
+    public UUID getRejectedBy() {
+        return rejectedBy;
+    }
+
+    public void setRejectedBy(UUID rejectedBy) {
+        this.rejectedBy = rejectedBy;
+    }
+
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+
+    public void setRejectionReason(String rejectionReason) {
+        this.rejectionReason = rejectionReason;
+    }
+
+    public Integer getReviewCycle() {
+        return reviewCycle;
+    }
+
+    public void setReviewCycle(Integer reviewCycle) {
+        this.reviewCycle = reviewCycle != null ? reviewCycle : 0;
     }
 
     public Instant getCanceledAt() {

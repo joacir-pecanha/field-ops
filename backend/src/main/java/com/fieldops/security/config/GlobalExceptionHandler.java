@@ -3,7 +3,9 @@ package com.fieldops.security.config;
 import com.fieldops.modules.auth.exception.InvalidCredentialsException;
 import com.fieldops.modules.auth.exception.InvalidRefreshTokenException;
 import com.fieldops.modules.auth.exception.UserInactiveException;
+import com.fieldops.modules.inspection.exception.InspectionReviewValidationException;
 import com.fieldops.modules.inspection.exception.InspectionSchedulingValidationException;
+import com.fieldops.modules.inspection.exception.InvalidInspectionStateTransitionException;
 import com.fieldops.modules.master.domain.UserStatus;
 import com.fieldops.modules.master.exception.BusinessRuleException;
 import com.fieldops.modules.master.exception.DuplicateResourceException;
@@ -191,6 +193,50 @@ public class GlobalExceptionHandler {
                 ex.getCode(),
                 request
         );
+    }
+
+    @ExceptionHandler(InspectionReviewValidationException.class)
+    public ResponseEntity<ProblemDetail> handleInspectionReviewValidation(
+            InspectionReviewValidationException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Validação de revisão rejeitada ({}) em {}", ex.getCode(), request.getRequestURI());
+        ProblemDetail problem = createProblemDetail(
+                HttpStatus.BAD_REQUEST,
+                "inspection-review-validation",
+                "Dados inválidos para revisão da inspeção",
+                ex.getMessage(),
+                ex.getCode(),
+                request
+        );
+        if (!ex.getErrors().isEmpty()) {
+            problem.setProperty("errors", ex.getErrors());
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(InvalidInspectionStateTransitionException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidInspectionStateTransition(
+            InvalidInspectionStateTransitionException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Transição de estado inválida ({}) em {}: {} -> {}",
+                ex.getCode(), request.getRequestURI(), ex.getCurrentStatus(), ex.getTargetStatus());
+        ProblemDetail problem = createProblemDetail(
+                HttpStatus.CONFLICT,
+                "invalid-inspection-state-transition",
+                "Transição de estado inválida",
+                ex.getMessage(),
+                ex.getCode(),
+                request
+        );
+        if (ex.getCurrentStatus() != null) {
+            problem.setProperty("currentStatus", ex.getCurrentStatus().name());
+        }
+        if (ex.getTargetStatus() != null) {
+            problem.setProperty("targetStatus", ex.getTargetStatus().name());
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
     @ExceptionHandler(InvalidEvidenceFileException.class)

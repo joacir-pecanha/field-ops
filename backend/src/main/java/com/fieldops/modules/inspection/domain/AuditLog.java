@@ -19,8 +19,11 @@ import java.util.UUID;
     name = "audit_logs",
     indexes = {
         @Index(name = "idx_audit_logs_entity", columnList = "entity_type, entity_id"),
+        @Index(name = "idx_audit_logs_entity_occurred_at", columnList = "entity_type, entity_id, occurred_at"),
         @Index(name = "idx_audit_logs_inspection_id", columnList = "inspection_id"),
+        @Index(name = "idx_audit_logs_inspection_occurred_at", columnList = "inspection_id, occurred_at"),
         @Index(name = "idx_audit_logs_actor_id", columnList = "actor_id"),
+        @Index(name = "idx_audit_logs_actor_occurred_at", columnList = "actor_id, occurred_at"),
         @Index(name = "idx_audit_logs_occurred_at", columnList = "occurred_at"),
         @Index(name = "idx_audit_logs_action", columnList = "action")
     }

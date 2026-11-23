@@ -469,6 +469,7 @@ public class SyncBatchProcessor {
         if (inspection.getStatus() == InspectionStatus.ATRIBUÍDA
                 || inspection.getStatus() == InspectionStatus.RASCUNHO
                 || inspection.getStatus() == InspectionStatus.REPROVADA) {
+            InspectionStatus previousStatus = inspection.getStatus();
             inspection.setStatus(InspectionStatus.EM_ANDAMENTO);
             if (inspection.getStartedAtDevice() == null) {
                 inspection.setStartedAtDevice(answeredAtDevice);
@@ -477,6 +478,23 @@ public class SyncBatchProcessor {
                 inspection.setStartedAtServer(serverTimestamp);
             }
             inspectionRepository.saveAndFlush(inspection);
+            if (previousStatus == InspectionStatus.REPROVADA) {
+                recordAuditEvent(
+                        inspection.getId(),
+                        actor,
+                        "INSPECTION_REOPENED",
+                        "INSPECTION",
+                        inspection.getId(),
+                        previousStatus.name(),
+                        InspectionStatus.EM_ANDAMENTO.name(),
+                        "{\"status\":\"REPROVADA\"}",
+                        "{\"status\":\"EM_ANDAMENTO\"}",
+                        operationId.toString(),
+                        answeredAtDevice,
+                        serverTimestamp,
+                        "Inspeção reprovada reaberta automaticamente para correção pelo técnico."
+                );
+            }
         }
 
         Object rawValueObj = payload.get("value");
@@ -488,6 +506,9 @@ public class SyncBatchProcessor {
         Optional<InspectionResponse> existingResponseOpt =
                 inspectionResponseRepository.findByInspectionItemId(snapshot.getId());
         boolean isUpdate = existingResponseOpt.isPresent();
+        String previousValueJson = isUpdate
+                ? buildResponseAuditJson(snapshot.getId(), existingResponseOpt.get())
+                : null;
 
         UUID requestedResponseId = resolveUuid(
                 payload,
@@ -563,8 +584,8 @@ public class SyncBatchProcessor {
                 saved.getId(),
                 null,
                 null,
-                null,
-                "{\"itemId\":\"" + snapshot.getId() + "\",\"valueRaw\":\"" + escapeJson(saved.getValueRaw()) + "\"}",
+                previousValueJson,
+                buildResponseAuditJson(snapshot.getId(), saved),
                 operationId.toString(),
                 answeredAtDevice,
                 serverTimestamp,
@@ -1112,6 +1133,12 @@ public class SyncBatchProcessor {
     }
 
     private void validateActorAccess(Inspection inspection, AuthenticatedUser actor) {
+        if (actor != null && (actor.getRole() == UserRole.SUPERVISOR || actor.getRole() == UserRole.ADMIN)) {
+            throw SyncOperationException.failed(
+                    "SILENT_RESPONSE_EDIT_FORBIDDEN",
+                    "Supervisores e administradores não podem alterar respostas do técnico pelo fluxo de sincronização; utilize ajuste administrativo auditado."
+            );
+        }
         if (actor != null && actor.getRole() == UserRole.TECHNICIAN
                 && !inspection.getTechnician().getId().equals(actor.getId())) {
             throw SyncOperationException.failed(
@@ -1119,6 +1146,15 @@ public class SyncBatchProcessor {
                     "Permissão negada: inspeção atribuída a outro técnico."
             );
         }
+    }
+
+    private String buildResponseAuditJson(UUID itemId, InspectionResponse response) {
+        return "{"
+                + "\"itemId\":\"" + itemId + "\","
+                + "\"valueRaw\":" + (response.getValueRaw() != null ? "\"" + escapeJson(response.getValueRaw()) + "\"" : "null") + ","
+                + "\"observation\":" + (response.getObservation() != null ? "\"" + escapeJson(response.getObservation()) + "\"" : "null") + ","
+                + "\"conformity\":" + (response.getConformity() != null ? "\"" + escapeJson(response.getConformity()) + "\"" : "null")
+                + "}";
     }
 
     private void validateMutableInspectionState(Inspection inspection) {
