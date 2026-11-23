@@ -2,10 +2,14 @@ package com.fieldops.modules.inspection.domain;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Set;
 
 /**
- * Estados formais de negócio da inspeção no MVP (RT-01, docs/fluxo_geral.md 7.4 e 7.6).
+ * Estados formais de negócio da inspeção no MVP e máquina de estados de transição
+ * conforme tabela 7.6 de docs/fluxo_geral.md, RN-089 e EX-02 (TASK-019).
  */
 public enum InspectionStatus {
     RASCUNHO,
@@ -25,19 +29,49 @@ public enum InspectionStatus {
         return this == APROVADA || this == CANCELADA;
     }
 
+    public boolean isLockedForCommonEdit() {
+        return this == APROVADA || this == CANCELADA;
+    }
+
+    public boolean canStartReview() {
+        return this == ENVIADA;
+    }
+
+    /**
+     * Conforme EX-02, a aprovação é permitida apenas a partir de EM_REVISÃO ou ENVIADA.
+     */
+    public boolean canApprove() {
+        return this == EM_REVISÃO || this == ENVIADA;
+    }
+
+    /**
+     * A reprovação é permitida a partir de EM_REVISÃO ou ENVIADA.
+     */
+    public boolean canReject() {
+        return this == EM_REVISÃO || this == ENVIADA;
+    }
+
+    public boolean canReopenForCorrection() {
+        return this == REPROVADA;
+    }
+
+    public Set<InspectionStatus> allowedTransitions() {
+        return switch (this) {
+            case RASCUNHO -> Collections.unmodifiableSet(EnumSet.of(ATRIBUÍDA, CANCELADA));
+            case ATRIBUÍDA -> Collections.unmodifiableSet(EnumSet.of(EM_ANDAMENTO, CANCELADA));
+            case EM_ANDAMENTO -> Collections.unmodifiableSet(EnumSet.of(ENVIADA, CANCELADA));
+            case ENVIADA -> Collections.unmodifiableSet(EnumSet.of(EM_REVISÃO, APROVADA, REPROVADA, CANCELADA));
+            case EM_REVISÃO -> Collections.unmodifiableSet(EnumSet.of(APROVADA, REPROVADA, CANCELADA));
+            case REPROVADA -> Collections.unmodifiableSet(EnumSet.of(EM_ANDAMENTO, CANCELADA));
+            case APROVADA, CANCELADA -> Collections.emptySet();
+        };
+    }
+
     public boolean canTransitionTo(InspectionStatus target) {
         if (target == null) {
             return false;
         }
-        return switch (this) {
-            case RASCUNHO -> target == ATRIBUÍDA || target == CANCELADA;
-            case ATRIBUÍDA -> target == EM_ANDAMENTO || target == CANCELADA;
-            case EM_ANDAMENTO -> target == ENVIADA || target == CANCELADA;
-            case ENVIADA -> target == EM_REVISÃO || target == CANCELADA;
-            case EM_REVISÃO -> target == APROVADA || target == REPROVADA || target == CANCELADA;
-            case REPROVADA -> target == EM_ANDAMENTO || target == CANCELADA;
-            case APROVADA, CANCELADA -> false;
-        };
+        return allowedTransitions().contains(target);
     }
 
     @JsonCreator

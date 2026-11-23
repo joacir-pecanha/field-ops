@@ -85,6 +85,21 @@ public class InspectionResponse {
     @Column(name = "server_received_at", nullable = false)
     private Instant serverReceivedAt;
 
+    @Column(name = "is_admin_adjusted", nullable = false)
+    private boolean adminAdjusted = false;
+
+    @Column(name = "admin_adjusted_value", columnDefinition = "text")
+    private String adminAdjustedValue;
+
+    @Column(name = "admin_adjustment_reason", length = 1000)
+    private String adminAdjustmentReason;
+
+    @Column(name = "admin_adjusted_by")
+    private UUID adminAdjustedBy;
+
+    @Column(name = "admin_adjusted_at")
+    private Instant adminAdjustedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -273,6 +288,46 @@ public class InspectionResponse {
 
     public void setServerReceivedAt(Instant serverReceivedAt) {
         this.serverReceivedAt = serverReceivedAt;
+    }
+
+    public boolean isAdminAdjusted() {
+        return adminAdjusted;
+    }
+
+    public void setAdminAdjusted(boolean adminAdjusted) {
+        this.adminAdjusted = adminAdjusted;
+    }
+
+    public String getAdminAdjustedValue() {
+        return adminAdjustedValue;
+    }
+
+    public void setAdminAdjustedValue(String adminAdjustedValue) {
+        this.adminAdjustedValue = adminAdjustedValue;
+    }
+
+    public String getAdminAdjustmentReason() {
+        return adminAdjustmentReason;
+    }
+
+    public void setAdminAdjustmentReason(String adminAdjustmentReason) {
+        this.adminAdjustmentReason = adminAdjustmentReason;
+    }
+
+    public UUID getAdminAdjustedBy() {
+        return adminAdjustedBy;
+    }
+
+    public void setAdminAdjustedBy(UUID adminAdjustedBy) {
+        this.adminAdjustedBy = adminAdjustedBy;
+    }
+
+    public Instant getAdminAdjustedAt() {
+        return adminAdjustedAt;
+    }
+
+    public void setAdminAdjustedAt(Instant adminAdjustedAt) {
+        this.adminAdjustedAt = adminAdjustedAt;
     }
 
     public Instant getCreatedAt() {
