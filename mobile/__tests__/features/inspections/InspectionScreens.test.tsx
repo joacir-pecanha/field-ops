@@ -21,6 +21,7 @@ import {
   PERMISSION_DENIED_MESSAGE,
   loadInspectionDetails,
   refreshInspectionDetails,
+  useInspectionDetails,
 } from '../../../src/features/inspections/hooks/useInspectionDetails';
 import HomeScreen from '../../../src/app/(protected)/(tabs)/index';
 import InspectionsScreen from '../../../src/app/(protected)/(tabs)/inspections';
@@ -671,6 +672,31 @@ describe('Telas de Inspeções Mobile — Renderização & Fluxos Offline (TASK-
       assert.ok(html.includes('Gerador G1'));
       assert.ok(html.includes('QR-GEN-001'));
       assert.ok(html.includes('Unidade Leste'));
+    });
+
+    test('11. Regressão: useInspectionDetails retorna arrays vazios referencialmente estáveis quando details é null', () => {
+      const snapshots: Array<ReturnType<typeof useInspectionDetails>> = [];
+
+      function HookProbe() {
+        const state = useInspectionDetails(null, {
+          autoLoad: false,
+          inspectionRepository: inspectionRepo,
+          networkMonitor,
+        });
+        snapshots.push(state);
+        return React.createElement('span', null, String(state.items.length));
+      }
+
+      renderToStaticMarkup(React.createElement(HookProbe));
+      renderToStaticMarkup(React.createElement(HookProbe));
+
+      assert.equal(snapshots.length, 2);
+      assert.equal(snapshots[0].sections, snapshots[1].sections);
+      assert.equal(snapshots[0].items, snapshots[1].items);
+      assert.equal(snapshots[0].responses, snapshots[1].responses);
+      assert.equal(snapshots[0].evidences, snapshots[1].evidences);
+      assert.equal(snapshots[0].pendingOperations, snapshots[1].pendingOperations);
+      assert.equal(snapshots[0].progress, snapshots[1].progress);
     });
   });
 });

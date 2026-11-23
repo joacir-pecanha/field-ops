@@ -54,6 +54,8 @@ export interface UseInspectionProgressInput {
 }
 
 const INACTIVE_ITEM_STATUSES = new Set(['INACTIVE', 'DISABLED', 'SKIPPED', 'NOT_APPLICABLE_ITEM']);
+const EMPTY_SECTIONS: ChecklistSection[] = [];
+const EMPTY_EVIDENCES: InspectionEvidence[] = [];
 
 function isItemApplicable(item: ChecklistItem): boolean {
   if (!item.status) return true;
@@ -276,8 +278,8 @@ export function calculateInspectionProgress({
 export function useInspectionProgress({
   items,
   responses,
-  sections = [],
-  evidences = [],
+  sections = EMPTY_SECTIONS,
+  evidences = EMPTY_EVIDENCES,
 }: UseInspectionProgressInput): InspectionProgressSummary {
   return useMemo(
     () =>
