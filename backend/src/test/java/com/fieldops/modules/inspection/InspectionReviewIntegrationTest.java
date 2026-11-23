@@ -646,11 +646,11 @@ class InspectionReviewIntegrationTest {
                         .content("{\"adjustedValue\":\"CONFORMING\",\"reason\":\"Tentativa\"}"))
                 .andExpect(status().isForbidden());
 
-        // Supervisor inativo também é bloqueado -> HTTP 403
+        // Supervisor inativo é bloqueado pelo filtro JWT antes de alcançar o controller -> HTTP 401
         mockMvc.perform(post("/api/v1/inspections/" + inspectionId + "/start-review")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + inactiveSupervisorToken))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test
@@ -748,7 +748,8 @@ class InspectionReviewIntegrationTest {
         assertTrue(json.contains("/api/v1/inspections/{id}/reject"));
         assertTrue(json.contains("/api/v1/inspections/{id}/reviews"));
         assertTrue(json.contains("/api/v1/inspections/{id}/responses/{itemId}/admin-adjustment"));
-        assertTrue(containsString("REVIEW_STARTED").matches("REVIEW_STARTED"));
+        assertTrue(json.contains("ApproveInspectionRequest"));
+        assertTrue(json.contains("RejectInspectionRequest"));
     }
 
     private InspectionDetailsResponse scheduleInspection() {
