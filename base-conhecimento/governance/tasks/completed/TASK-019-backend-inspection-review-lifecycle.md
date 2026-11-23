@@ -8,7 +8,7 @@
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/fluxo_geral.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/fluxo_geral.md), [docs/regras-de-negocio.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/regras-de-negocio.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-26
 
 ---
 
@@ -65,7 +65,7 @@ Após o técnico concluir e sincronizar uma inspeção em campo (`ENVIADA`), o s
 - [x] **CA-02:** Aprovação grava o identificador do supervisor, data/hora e bloqueia edições adicionais.
 - [x] **CA-03:** Reprovação sem justificativa falha com validação clara; com justificativa altera estado para `REPROVADA`.
 - [x] **CA-04:** Registro completo é gerado na tabela de auditoria.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
