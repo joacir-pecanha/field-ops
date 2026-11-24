@@ -8,7 +8,7 @@
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-24
 
 ---
 
@@ -69,7 +69,7 @@ O Dashboard é a visão executiva do FieldOps para o supervisor e o administrado
 - [x] **CA-02:** Clicar no card "Aguardando Revisão" filtra e direciona para a lista correspondente.
 - [x] **CA-03:** A distribuição de não conformidades reflete com precisão os dados cadastrados.
 - [x] **CA-04:** Interface responsiva sem barras de rolagem horizontais em notebook.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
