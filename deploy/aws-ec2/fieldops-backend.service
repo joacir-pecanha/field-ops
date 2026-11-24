@@ -1,0 +1,14 @@
+[Unit]
+Description=FieldOps Backend API
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/fieldops
+EnvironmentFile=/opt/fieldops/backend.env
+ExecStart=/usr/bin/java -Xms256m -Xmx1024m -jar /opt/fieldops/fieldops-backend.jar
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

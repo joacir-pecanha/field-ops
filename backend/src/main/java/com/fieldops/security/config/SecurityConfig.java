@@ -2,6 +2,7 @@ package com.fieldops.security.config;
 
 import com.fieldops.security.jwt.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -24,6 +25,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -36,10 +38,28 @@ import java.util.List;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private static final List<String> DEFAULT_ALLOWED_ORIGIN_PATTERNS = List.of(
+            "http://localhost:*",
+            "http://127.0.0.1:*",
+            "http://192.168.*:*",
+            "https://*.sslip.io"
+    );
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final List<String> allowedOriginPatterns;
+
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            @Value("${fieldops.security.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://192.168.*:*,https://*.sslip.io}")
+            String allowedOriginPatternsRaw) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        List<String> parsed = allowedOriginPatternsRaw == null
+                ? List.of()
+                : Arrays.stream(allowedOriginPatternsRaw.split(","))
+                        .map(String::trim)
+                        .filter(pattern -> !pattern.isEmpty())
+                        .toList();
+        this.allowedOriginPatterns = parsed.isEmpty() ? DEFAULT_ALLOWED_ORIGIN_PATTERNS : parsed;
     }
 
     @Bean
@@ -122,7 +142,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*", "http://192.168.*:*"));
+        configuration.setAllowedOriginPatterns(allowedOriginPatterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(
                 HttpHeaders.AUTHORIZATION,
