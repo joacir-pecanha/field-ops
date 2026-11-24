@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fieldops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fieldops}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - fieldops_pgdata:/var/lib/postgresql/data
+      - ./backend/src/main/resources/db/migration:/opt/fieldops/db/migration:ro
+      - ./backend/src/main/resources/db/seed:/opt/fieldops/db/seed:ro
+      - ./docker/postgres/init/01-init-schema-and-seed.sh:/docker-entrypoint-initdb.d/01-init-schema-and-seed.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-fieldops}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    networks:
+      - fieldops-network
+
+  # Serviço utilitário sob demanda para reaplicar/resetar o seed idempotente
+  # localmente ou em um banco PostgreSQL gerenciado na nuvem (ex.: AWS RDS).
+  # Uso local:   docker compose --profile seed run --rm db-seed
+  # Uso AWS RDS: DB_HOST=mydb.xxxx.rds.amazonaws.com DB_SSLMODE=require docker compose --profile seed run --rm db-seed
+  db-seed:
+    image: postgres:16-alpine
+    profiles: ["seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    environment:
+      PGHOST: ${DB_HOST:-postgres}
+      PGPORT: ${DB_PORT:-5432}
+      PGDATABASE: ${POSTGRES_DB:-fieldops}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGSSLMODE: ${DB_SSLMODE:-prefer}
+    volumes:
+      - ./backend/src/main/resources/db/seed:/opt/fieldops/db/seed:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        echo "[fieldops-db-seed] Aplicando R__demo_seed_data.sql em $$PGHOST:$$PGPORT/$$PGDATABASE..."
+        psql -v ON_ERROR_STOP=1 -f /opt/fieldops/db/seed/R__demo_seed_data.sql
+        echo "[fieldops-db-seed] Seed idempotente aplicado com sucesso."
+    networks:
+      - fieldops-network
+
+volumes:
+  fieldops_pgdata:
+    driver: local
+
+networks:
+  fieldops-network:
+    driver: bridge
