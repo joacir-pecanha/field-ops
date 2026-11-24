@@ -180,7 +180,7 @@ public class DevBootstrapSeedConfig {
 
                 Site siteCampinas = new Site();
                 siteCampinas.setId(UUID.randomUUID());
-                siteCampinas.setClient(beta);
+                siteCampinas.setClient(alfa);
                 siteCampinas.setCode("SITE-CMP-01");
                 siteCampinas.setName("Centro de Distribuição Campinas");
                 siteCampinas.setDescription("Armazém refrigerado e docas de expedição.");
