@@ -66,6 +66,12 @@ describe('AdminLayoutComponent', () => {
     expect(navIcons.length).toBe(component.visibleNavItems().length);
   });
 
+  it('should not display placeholder Não Conformidades item in sidebar navigation', () => {
+    expect(
+      component.visibleNavItems().some((item) => item.route === '/app/non-conformities')
+    ).toBeFalse();
+  });
+
   it('should call AuthService.logout() when clicking Sair button (RF-05, CA-03)', () => {
     const logoutBtn = fixture.nativeElement.querySelector(
       '[data-testid="logout-button"]'

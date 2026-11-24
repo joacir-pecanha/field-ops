@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, Alert, Platform, ScrollView } from 'react-nativ
 import { tokens } from '@/design-system/tokens';
 import { Button } from '@/design-system/components/Button';
 import { useAuth } from '@/features/auth/context/AuthContext';
-import { seedDatabase } from '@/infrastructure/database';
+import { clearWebEvidenceStorage } from '@/features/evidence';
+import { useSyncStore } from '@/features/sync';
+import { clearLocalDatabaseData, seedDatabase } from '@/infrastructure/database';
 import { MaterialIcons } from '@expo/vector-icons';
 
 function showFeedbackAlert(title: string, message: string) {
@@ -32,6 +34,43 @@ export default function ProfileScreen() {
       console.error(e);
       showFeedbackAlert('Erro', 'Falha ao popular banco de dados.');
     }
+  };
+
+  const executeClearLocalData = async () => {
+    try {
+      await clearLocalDatabaseData();
+      clearWebEvidenceStorage();
+      const syncStore = useSyncStore.getState();
+      syncStore.setCounts(0, 0, []);
+      syncStore.resetSyncFeedback();
+      showFeedbackAlert(
+        'Dados Locais Limpos',
+        'O banco SQLite local e a fila Outbox foram limpos. Atualize a lista na aba Inspeções para baixar as inspeções atuais do servidor.'
+      );
+    } catch (e) {
+      console.error(e);
+      showFeedbackAlert('Erro', 'Falha ao limpar os dados locais.');
+    }
+  };
+
+  const handleClearLocalData = () => {
+    const message =
+      'Isso apagará inspeções, respostas, evidências e a fila Outbox salvos localmente no dispositivo. Deseja continuar?';
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof window !== 'undefined' && typeof window.confirm === 'function'
+          ? window.confirm(`Limpar Dados Locais (SQLite)\n\n${message}`)
+          : true;
+      if (confirmed) {
+        void executeClearLocalData();
+      }
+      return;
+    }
+
+    Alert.alert('Limpar Dados Locais (SQLite)', message, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Limpar', style: 'destructive', onPress: () => void executeClearLocalData() },
+    ]);
   };
 
   const handleLogout = () => {
@@ -76,6 +115,12 @@ export default function ProfileScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Desenvolvimento</Text>
+        <Button
+          title="Limpar Dados Locais (SQLite)"
+          onPress={handleClearLocalData}
+          variant="danger"
+          style={styles.devButton}
+        />
         <Button 
           title="Popular Banco de Dados (Seed)" 
           onPress={handleSeed} 

@@ -208,8 +208,10 @@ export class ApiClient {
       }
     }
 
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       Accept: 'application/json',
       ...(customHeaders as Record<string, string>),
     };
@@ -227,7 +229,7 @@ export class ApiClient {
     };
 
     if (body !== undefined) {
-      init.body = typeof body === 'string' ? body : JSON.stringify(body);
+      init.body = isFormData ? body : typeof body === 'string' ? body : JSON.stringify(body);
     }
 
     let response: Response;

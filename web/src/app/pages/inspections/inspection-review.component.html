@@ -1,0 +1,503 @@
+<section class="master-page" data-testid="inspection-review-page">
+  <header class="page-header-bar">
+    <div>
+      <div style="margin-bottom: 0.35rem">
+        <a routerLink="/app/inspections" class="btn btn-secondary btn-sm">
+          ← Voltar para Inspeções
+        </a>
+      </div>
+      <h1>Revisão Técnica da Inspeção</h1>
+      <p>
+        Avalie respostas sincronizadas, evidências fotográficas em alta resolução, não
+        conformidades e coordenadas geográficas antes de emitir o veredito final.
+      </p>
+    </div>
+
+    @if (inspection(); as detail) {
+      <div class="header-actions">
+        @if (canStartReview()) {
+          <button
+            type="button"
+            class="btn btn-secondary"
+            [disabled]="actionSaving()"
+            (click)="startReview()"
+            data-testid="start-review-btn"
+          >
+            @if (actionSaving()) {
+              <span class="inline-spinner"></span>
+            }
+            <span>Iniciar Revisão</span>
+          </button>
+        }
+
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="actionsLocked() || !canSubmitVerdict() || actionSaving()"
+          [title]="actionDisabledReason(detail)"
+          (click)="openApproveModal()"
+          data-testid="open-approve-modal-btn"
+        >
+          Aprovar Inspeção
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-danger"
+          [disabled]="actionsLocked() || !canSubmitVerdict() || actionSaving()"
+          [title]="actionDisabledReason(detail)"
+          (click)="openRejectModal()"
+          data-testid="open-reject-modal-btn"
+        >
+          Reprovar Inspeção
+        </button>
+      </div>
+    }
+  </header>
+
+  @if (loading()) {
+    <article class="review-card" data-testid="review-loading-state">
+      <div class="skeleton-list" aria-label="Carregando revisão da inspeção">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+    </article>
+  } @else if (loadError()) {
+    <div class="alert-banner alert-error" role="alert" data-testid="review-error-state">
+      <div>
+        <strong>Erro ao carregar revisão técnica</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="loadReviewData()">
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (inspection(); as detail) {
+    @if (actionError()) {
+      <div class="alert-banner alert-error" role="alert" data-testid="review-action-error">
+        <div>
+          <strong>Falha ao processar ação</strong>
+          <p>{{ actionError() }}</p>
+        </div>
+      </div>
+    }
+
+    @if (actionsLocked()) {
+      <div
+        class="alert-banner"
+        [class.alert-success]="detail.status === 'APROVADA'"
+        [class.alert-warning]="detail.status === 'CANCELADA'"
+        role="status"
+        data-testid="review-locked-banner"
+      >
+        <div>
+          @if (detail.status === 'APROVADA') {
+            <strong>Inspeção Aprovada — Edições Bloqueadas (RN-082)</strong>
+            <p>
+              Aprovada
+              @if (detail.approvedByName) {
+                por {{ detail.approvedByName }}
+              }
+              @if (detail.approvedAt) {
+                em {{ detail.approvedAt | date: 'dd/MM/yyyy HH:mm' }}
+              }
+              .
+              @if (detail.reviewComments) {
+                Parecer técnico: {{ detail.reviewComments }}
+              }
+            </p>
+          } @else {
+            <strong>Inspeção Cancelada — Ações Desabilitadas</strong>
+            <p>
+              @if (detail.canceledReason) {
+                Motivo do cancelamento: {{ detail.canceledReason }}
+              } @else {
+                Esta inspeção foi cancelada e não aceita aprovação ou reprovação.
+              }
+            </p>
+          }
+        </div>
+      </div>
+    } @else if (detail.status === 'REPROVADA' && effectiveRejectionReason(detail)) {
+      <div class="alert-banner alert-error" role="status" data-testid="review-rejected-banner">
+        <div>
+          <strong>Inspeção Reprovada — Aguardando Correção do Técnico</strong>
+          <p>
+            Motivo registrado: {{ effectiveRejectionReason(detail) }}
+            @if (detail.rejectedByName) {
+              (por {{ detail.rejectedByName }})
+            }
+          </p>
+        </div>
+      </div>
+    }
+
+    <!-- RF-01: Cabeçalho Completo da Inspeção -->
+    <article class="review-card" data-testid="review-header-card">
+      <div class="section-heading">
+        <div>
+          <h2 data-testid="review-inspection-title">{{ detail.title }}</h2>
+          <div class="cell-secondary">
+            ID: <span class="code-chip">{{ detail.id }}</span>
+            @if (detail.templateCode) {
+              • Modelo: <span class="code-chip">{{ detail.templateCode }}</span>
+            }
+            @if (detail.templateTitle) {
+              <span>
+                {{ detail.templateTitle }} (v{{
+                  detail.templateVersionNumber ?? detail.templateVersion ?? 1
+                }})
+              </span>
+            }
+          </div>
+        </div>
+
+        <app-status-badge
+          [status]="detail.status"
+          [overdue]="detail.overdue"
+          [showOverdueBadge]="true"
+        />
+      </div>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span>Cliente</span>
+          <strong data-testid="review-client-name">{{ detail.clientName || '—' }}</strong>
+        </div>
+        <div class="meta-item">
+          <span>Local</span>
+          <strong data-testid="review-site-name">
+            {{ detail.siteName || '—' }}
+            @if (detail.siteAddress) {
+              <small style="display: block; font-weight: 500; color: #64748b">
+                {{ detail.siteAddress }}
+              </small>
+            }
+          </strong>
+        </div>
+        <div class="meta-item">
+          <span>Equipamento</span>
+          <strong data-testid="review-equipment-name">
+            @if (detail.equipmentName) {
+              {{ detail.equipmentName }}
+              @if (detail.equipmentCode) {
+                ({{ detail.equipmentCode }})
+              }
+              @if (detail.equipmentQrCode) {
+                <small style="display: block; font-weight: 500; color: #64748b">
+                  QR: {{ detail.equipmentQrCode }}
+                </small>
+              }
+            } @else {
+              Inspeção geral do local
+            }
+          </strong>
+        </div>
+        <div class="meta-item">
+          <span>Técnico Responsável</span>
+          <strong data-testid="review-technician-name">
+            {{ detail.technicianName || '—' }}
+            @if (detail.technicianEmail) {
+              <small style="display: block; font-weight: 500; color: #64748b">
+                {{ detail.technicianEmail }}
+              </small>
+            }
+          </strong>
+        </div>
+        <div class="meta-item">
+          <span>Supervisor / Prioridade</span>
+          <strong>
+            {{ detail.supervisorName || 'Não atribuído' }} • {{ priorityLabel(detail.priority) }}
+          </strong>
+        </div>
+        <div class="meta-item">
+          <span>Data Prevista</span>
+          <strong>{{ detail.scheduledFor | date: 'dd/MM/yyyy HH:mm' }}</strong>
+        </div>
+        <div class="meta-item">
+          <span>Início em Campo</span>
+          <strong data-testid="review-started-at">
+            @if (detail.startedAtDevice || detail.startedAtServer) {
+              {{ (detail.startedAtDevice || detail.startedAtServer) | date: 'dd/MM/yyyy HH:mm' }}
+            } @else {
+              Não iniciada
+            }
+          </strong>
+        </div>
+        <div class="meta-item">
+          <span>Conclusão em Campo</span>
+          <strong data-testid="review-completed-at">
+            @if (detail.completedAtDevice || detail.submittedAtServer) {
+              {{
+                (detail.completedAtDevice || detail.submittedAtServer) | date: 'dd/MM/yyyy HH:mm'
+              }}
+            } @else {
+              Não concluída
+            }
+          </strong>
+        </div>
+      </div>
+
+      @if (detail.instructions) {
+        <div class="field-hint">
+          <strong>Instruções ao técnico:</strong> {{ detail.instructions }}
+        </div>
+      }
+    </article>
+
+    <div class="review-layout">
+      <div class="review-col">
+        <!-- RF-05: Seção Destacada de Não Conformidades Ordenadas por Severidade -->
+        <article class="review-card" data-testid="non-conformities-section">
+          <div class="section-heading">
+            <h2>
+              Não Conformidades Registradas ({{ sortedNonConformities().length }})
+            </h2>
+            <span class="field-hint">Ordenadas por criticidade (Crítica → Baixa)</span>
+          </div>
+
+          @if (sortedNonConformities().length === 0) {
+            <div class="empty-state" style="padding: 1.35rem" data-testid="non-conformities-empty">
+              <h3>Nenhuma não conformidade registrada</h3>
+              <p>O técnico não reportou desvios ou ocorrências nesta inspeção.</p>
+            </div>
+          } @else {
+            @for (nc of sortedNonConformities(); track nc.id) {
+              <div class="nc-card" data-testid="non-conformity-card">
+                <div class="nc-card-head">
+                  <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap">
+                    <span
+                      class="sev-badge"
+                      [ngClass]="'sev-' + severityTone(nc.severity)"
+                      data-testid="nc-severity-badge"
+                    >
+                      {{ severityLabel(nc.severity) }}
+                    </span>
+                    <strong data-testid="nc-title">{{ nc.title }}</strong>
+                  </div>
+                  <span class="code-chip">{{ ncStatusLabel(nc.status) }}</span>
+                </div>
+
+                @if (nc.itemTitle) {
+                  <div class="cell-secondary">Item relacionado: {{ nc.itemTitle }}</div>
+                }
+                @if (nc.description) {
+                  <p style="margin: 0; font-size: 0.86rem; color: #1e293b">{{ nc.description }}</p>
+                }
+
+                @let ncEvidences = evidencesForNonConformity(nc);
+                @if (ncEvidences.length > 0) {
+                  <div class="nc-thumbs-row">
+                    @for (ev of ncEvidences; track evidenceId(ev) || $index) {
+                      @if (hasInlineThumbError(ev)) {
+                        <div class="nc-thumb-fallback" data-testid="nc-evidence-fallback">
+                          Imagem indisponível
+                        </div>
+                      } @else if (evidenceSrc(ev); as src) {
+                        <button
+                          type="button"
+                          class="nc-thumb-btn"
+                          (click)="openEvidenceInLightbox(ev)"
+                          [attr.aria-label]="'Abrir evidência ' + evidenceName(ev)"
+                          data-testid="nc-evidence-thumb"
+                        >
+                          <img
+                            [src]="src"
+                            [alt]="evidenceName(ev)"
+                            (error)="onInlineThumbError(ev)"
+                          />
+                        </button>
+                      }
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+        </article>
+
+        <!-- RF-02 & RF-03: Checklist Hierárquico com Respostas e Evidências -->
+        <article class="review-card">
+          <div class="section-heading">
+            <h2>Checklist Executado e Evidências por Item</h2>
+            <span class="field-hint">Texto preservado do snapshot congelado</span>
+          </div>
+
+          <app-checklist-review-tree
+            [items]="detail.items"
+            [responses]="detail.responses ?? []"
+            [evidences]="detail.evidences ?? []"
+            [nonConformities]="detail.nonConformities ?? []"
+            [resolvedUrls]="resolvedEvidenceUrls()"
+            [failedEvidenceIds]="failedEvidenceIds()"
+            [loadingEvidenceIds]="loadingEvidenceIds()"
+            (evidenceSelected)="openLightboxFromTree($event)"
+          />
+        </article>
+
+        @if (unlinkedEvidences().length > 0) {
+          <article class="review-card" data-testid="general-evidences-card">
+            <div class="section-heading">
+              <h2>Outras Evidências Fotográficas ({{ unlinkedEvidences().length }})</h2>
+            </div>
+            <div class="nc-thumbs-row">
+              @for (ev of unlinkedEvidences(); track evidenceId(ev) || $index) {
+                @if (hasInlineThumbError(ev)) {
+                  <div class="nc-thumb-fallback">Imagem indisponível</div>
+                } @else if (evidenceSrc(ev); as src) {
+                  <button
+                    type="button"
+                    class="nc-thumb-btn"
+                    (click)="openEvidenceInLightbox(ev)"
+                    [attr.aria-label]="'Abrir evidência ' + evidenceName(ev)"
+                  >
+                    <img
+                      [src]="src"
+                      [alt]="evidenceName(ev)"
+                      (error)="onInlineThumbError(ev)"
+                    />
+                  </button>
+                }
+              }
+            </div>
+          </article>
+        }
+      </div>
+
+      <aside class="review-col">
+        <!-- Resumo Numérico -->
+        <article class="review-card">
+          <div class="section-heading">
+            <h2>Resumo da Execução</h2>
+          </div>
+          <div class="stats-strip">
+            <div class="stat-box">
+              <span>Respostas</span>
+              <strong>{{ answeredCount() }} / {{ detail.items.length || detail.totalItems }}</strong>
+            </div>
+            <div class="stat-box">
+              <span>Fotos</span>
+              <strong>{{ (detail.evidences ?? []).length }}</strong>
+            </div>
+            <div class="stat-box">
+              <span>Não Conformidades</span>
+              <strong>{{ sortedNonConformities().length }}</strong>
+            </div>
+            <div class="stat-box">
+              <span>Ciclo Revisão</span>
+              <strong>#{{ detail.reviewCycle ?? 0 }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <!-- RF-04: Localização Geográfica -->
+        <article class="review-card">
+          <div class="section-heading">
+            <h2>Localização Geográfica</h2>
+          </div>
+          <app-location-map
+            [startLatitude]="detail.startLatitude"
+            [startLongitude]="detail.startLongitude"
+            [startAccuracy]="detail.startAccuracy"
+            [startedAt]="detail.startedAtDevice || detail.startedAtServer"
+            [completeLatitude]="detail.completeLatitude"
+            [completeLongitude]="detail.completeLongitude"
+            [completeAccuracy]="detail.completeAccuracy"
+            [completedAt]="detail.completedAtDevice || detail.submittedAtServer"
+            [siteName]="detail.siteName"
+            [siteAddress]="detail.siteAddress"
+          />
+        </article>
+
+        <!-- Histórico de Ciclos de Revisão -->
+        <article class="review-card" data-testid="review-history-card">
+          <div class="section-heading">
+            <h2>Histórico de Revisões</h2>
+          </div>
+
+          @if ((detail.reviews ?? []).length === 0) {
+            <div class="field-hint">Nenhum ciclo de revisão registrado até o momento.</div>
+          } @else {
+            <div class="timeline-list">
+              @for (rev of detail.reviews ?? []; track rev.id) {
+                <div class="timeline-row" data-testid="review-history-item">
+                  <strong>
+                    Ciclo {{ rev.reviewCycle ?? 1 }} — {{ reviewDecisionLabel(rev.decision) }}
+                  </strong>
+                  @if (rev.reason) {
+                    <div>Motivo: {{ rev.reason }}</div>
+                  }
+                  @if (rev.comments) {
+                    <div>Parecer: {{ rev.comments }}</div>
+                  }
+                  <span class="cell-secondary">
+                    {{ rev.reviewedAt | date: 'dd/MM/yyyy HH:mm' }}
+                    {{ rev.reviewerName ? '• ' + rev.reviewerName : '' }}
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </article>
+
+        <!-- Trilha de Auditoria -->
+        <article class="review-card" data-testid="review-audit-card">
+          <div class="section-heading">
+            <h2>Trilha de Auditoria</h2>
+          </div>
+
+          @if (auditLogs().length === 0) {
+            <div class="field-hint">Nenhum evento de auditoria carregado.</div>
+          } @else {
+            <div class="timeline-list">
+              @for (log of auditLogs(); track log.id) {
+                <div class="timeline-row">
+                  <strong>{{ log.action }}</strong>
+                  @if (log.details) {
+                    <div>{{ log.details }}</div>
+                  }
+                  <span class="cell-secondary">
+                    {{ log.occurredAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+                    {{ log.actorEmail ? '• ' + log.actorEmail : '' }}
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </article>
+      </aside>
+    </div>
+  }
+
+  <!-- Lightbox em Alta Resolução com Zoom e Navegação -->
+  <app-evidence-lightbox
+    [open]="lightboxOpen()"
+    [evidences]="lightboxEvidences()"
+    [activeIndex]="lightboxIndex()"
+    [resolvedUrls]="resolvedEvidenceUrls()"
+    [failedEvidenceIds]="failedEvidenceIds()"
+    [loadingEvidenceIds]="loadingEvidenceIds()"
+    (indexChange)="lightboxIndex.set($event)"
+    (closed)="closeLightbox()"
+  />
+
+  <!-- Modais de Aprovação e Reprovação -->
+  <app-approval-modal
+    [open]="approveModalOpen()"
+    [inspection]="inspection()"
+    [loading]="actionSaving()"
+    [errorMessage]="modalError()"
+    (confirmed)="confirmApprove($event)"
+    (cancelled)="closeApproveModal()"
+  />
+
+  <app-rejection-modal
+    [open]="rejectModalOpen()"
+    [inspection]="inspection()"
+    [loading]="actionSaving()"
+    [errorMessage]="modalError()"
+    (confirmed)="confirmReject($event)"
+    (cancelled)="closeRejectModal()"
+  />
+</section>

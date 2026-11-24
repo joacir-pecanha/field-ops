@@ -4,7 +4,6 @@ import { WEB_ALLOWED_ROLES } from './core/auth/auth.models';
 import { AdminLayoutComponent } from './layout/admin-layout.component';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { LoginComponent } from './pages/login/login.component';
-import { ModulePlaceholderComponent } from './pages/module-placeholder/module-placeholder.component';
 import { pendingChangesGuard } from './pages/templates/template-builder.component';
 
 export const routes: Routes = [
@@ -150,14 +149,23 @@ export const routes: Routes = [
         title: 'Agendar Inspeção — FieldOps Admin',
       },
       {
+        path: 'inspections/:inspectionId/review',
+        loadComponent: () =>
+          import('./pages/inspections/inspection-review.component').then(
+            (m) => m.InspectionReviewComponent
+          ),
+        data: { roles: ['ADMIN', 'SUPERVISOR'] },
+        title: 'Revisão Técnica da Inspeção — FieldOps Admin',
+      },
+      {
+        path: 'inspections/:inspectionId',
+        redirectTo: 'inspections/:inspectionId/review',
+        pathMatch: 'full',
+      },
+      {
         path: 'non-conformities',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN', 'SUPERVISOR'],
-          title: 'Não Conformidades',
-          description: 'Monitoramento de não conformidades por criticidade (TASK-020).',
-        },
-        title: 'Não Conformidades — FieldOps Admin',
+        redirectTo: 'inspections',
+        pathMatch: 'full',
       },
     ],
   },

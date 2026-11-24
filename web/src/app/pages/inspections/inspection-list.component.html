@@ -292,6 +292,14 @@
                 </td>
                 <td>
                   <div class="row-actions">
+                    <a
+                      [routerLink]="['/app/inspections', inspection.id, 'review']"
+                      class="btn btn-primary btn-sm"
+                      data-testid="inspection-review-link"
+                    >
+                      Revisar
+                    </a>
+
                     <button
                       type="button"
                       class="btn btn-secondary btn-sm"
@@ -480,6 +488,14 @@
         </div>
 
         <footer class="modal-footer">
+          <a
+            [routerLink]="['/app/inspections', detail.id, 'review']"
+            class="btn btn-primary"
+            (click)="closeDetailsModal()"
+            data-testid="inspection-details-review-link"
+          >
+            Abrir Tela de Revisão
+          </a>
           <button type="button" class="btn btn-secondary" (click)="closeDetailsModal()">
             Fechar
           </button>

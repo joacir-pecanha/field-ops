@@ -48,12 +48,6 @@ const NAV_ITEMS: readonly NavItem[] = [
     icon: 'inspections',
   },
   {
-    label: 'Não Conformidades',
-    route: '/app/non-conformities',
-    roles: ['ADMIN', 'SUPERVISOR'],
-    icon: 'non-conformities',
-  },
-  {
     label: 'Swagger / API',
     route: '/app/api-docs',
     roles: ['ADMIN', 'SUPERVISOR'],
