@@ -219,13 +219,27 @@ class DemoSeedAndReleaseE2EIntegrationTest {
                     .andExpect(jsonPath("$.qrCode").value(qr));
         }
 
-        // Valida 1 modelo publicado completo com os tipos obrigatórios
-        mockMvc.perform(get("/api/v1/inspection-templates?search=TPL-GER-01&status=PUBLISHED")
+        // Valida 1 modelo publicado completo com os tipos obrigatórios e opções de escolha única
+        MvcResult tplListRes = mockMvc.perform(get("/api/v1/inspection-templates?search=TPL-GER-01&status=PUBLISHED")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + supervisorToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].code").value("TPL-GER-01"))
                 .andExpect(jsonPath("$.content[0].status").value("PUBLISHED"))
-                .andExpect(jsonPath("$.content[0].sections", hasSize(2)));
+                .andReturn();
+        String templateId = objectMapper.readTree(tplListRes.getResponse().getContentAsString())
+                .at("/content/0/id").asText();
+
+        mockMvc.perform(get("/api/v1/inspection-templates/" + templateId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + supervisorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sections", hasSize(2)))
+                .andExpect(jsonPath("$.sections[0].items", hasSize(3)))
+                .andExpect(jsonPath("$.sections[1].items", hasSize(5)))
+                .andExpect(jsonPath("$.sections[0].items[2].code").value("GER-03"))
+                .andExpect(jsonPath("$.sections[0].items[2].options", hasSize(3)))
+                .andExpect(jsonPath("$.sections[0].items[2].options", hasItem("Automático")))
+                .andExpect(jsonPath("$.sections[0].items[2].options", hasItem("Manual")))
+                .andExpect(jsonPath("$.sections[0].items[2].options", hasItem("Desligado")));
 
         // Valida 1 inspeção atribuída pronta para download
         mockMvc.perform(get("/api/v1/inspections/assigned")
@@ -616,7 +630,8 @@ class DemoSeedAndReleaseE2EIntegrationTest {
         mockMvc.perform(get("/api/v1/inspections/" + inspectionId + "/audit-logs")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + supervisorToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].action", hasItem("INSPECTION_SCHEDULED")))
+                .andExpect(jsonPath("$[*].action", hasItem("INSPECTION_CREATED")))
+                .andExpect(jsonPath("$[*].action", hasItem("INSPECTION_ASSIGNED")))
                 .andExpect(jsonPath("$[*].action", hasItem("INSPECTION_STARTED")))
                 .andExpect(jsonPath("$[*].action", hasItem("INSPECTION_COMPLETED")))
                 .andExpect(jsonPath("$[*].action", hasItem("REVIEW_STARTED")))

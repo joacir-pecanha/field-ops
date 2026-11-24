@@ -533,7 +533,7 @@ SELECT
     '88888888-8888-4888-8888-888888888801',
     (SELECT id FROM users WHERE LOWER(email) = 'supervisor@fieldops.com' LIMIT 1),
     'supervisor@fieldops.com',
-    'INSPECTION_SCHEDULED',
+    'INSPECTION_CREATED',
     'INSPECTION',
     '88888888-8888-4888-8888-888888888801',
     NULL,

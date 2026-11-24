@@ -20,8 +20,8 @@ field-ops/
 ## Pré-requisitos
 
 ### Para o Backend (`backend/`)
-- **Java JDK 26** instalado e configurado no `PATH` (`java -version`).
-- **PostgreSQL** em execução (local ou via Docker).
+- **Java JDK 23+** instalado e configurado no `PATH` (`pom.xml` declara `<java.version>26</java.version>`; ao rodar em JDK 23, utilize `-Djava.version=23`).
+- **PostgreSQL 16+** em execução (local via Docker Compose incluído na raiz ou Amazon RDS).
 - *(Não é necessário instalar o Maven globalmente; o projeto inclui o Maven Wrapper `mvnw` / `mvnw.cmd`).*
 
 ### Para a Interface Administrativa Web (`web/`)
@@ -30,6 +30,49 @@ field-ops/
 ### Para o Mobile (`mobile/`)
 - **Node.js** (v20+ recomendado) e **npm**.
 - Aplicativo **Expo Go** instalado no dispositivo móvel (Android ou iOS) ou Android Studio / Xcode para emulador.
+
+---
+
+## 0. Banco de Dados PostgreSQL via Docker Compose (Seed Automático & Prontidão AWS)
+
+O repositório inclui [docker-compose.yml](docker-compose.yml) e [.env.example](.env.example) para subir um **PostgreSQL 16** já inicializado com as migrações Flyway (`V1` a `V6`) e a massa de demonstração idempotente ([R__demo_seed_data.sql](backend/src/main/resources/db/seed/R__demo_seed_data.sql)):
+
+```bash
+# 1. (Opcional) Copie o arquivo de variáveis de ambiente
+cp .env.example .env
+
+# 2. Suba o PostgreSQL com schema + seed automático
+docker compose up -d
+```
+
+### Reset Instantâneo da Massa de Demonstração (Idempotente)
+
+Caso algum dado seja alterado ou corrompido durante os ensaios, redefina o banco de demonstração sem derrubar o container:
+
+```powershell
+# Via Docker Compose (funciona também apontando DB_HOST para AWS RDS)
+docker compose --profile seed run --rm db-seed
+
+# Ou via script completo de healthcheck + reset (Windows PowerShell)
+.\scripts\e2e-healthcheck.ps1 -ResetSeed
+```
+
+```bash
+# Linux / macOS
+./scripts/e2e-healthcheck.sh --reset-seed
+```
+
+### Credenciais Padrão da Massa de Testes (Senha única: `FieldOps@123`)
+
+| Perfil | E-mail | Senha | Aplicação |
+| :--- | :--- | :--- | :--- |
+| **Administrador** | `admin@fieldops.com` | `FieldOps@123` | Web Admin |
+| **Supervisor** | `supervisor@fieldops.com` | `FieldOps@123` | Web Admin |
+| **Técnico Principal** | `tecnico@fieldops.com` | `FieldOps@123` | Mobile |
+| **Técnica Secundária** | `ana.tecnica@fieldops.com` | `FieldOps@123` | Mobile |
+
+- **QR Codes para leitura em campo:** salvos em [mobile/assets/demo-qr-codes/](mobile/assets/demo-qr-codes/) (`QR-FIELDOPS-GD001.png`, `QR-FIELDOPS-CP002.png`, `QR-FIELDOPS-TR003.png`). Para regenerá-los: `node scripts/generate-demo-qr-codes.mjs`.
+- **Migração para Nuvem (AWS):** todas as configurações de banco, pool HikariCP, JWT e armazenamento estão externalizadas via variáveis de ambiente em [.env.example](.env.example) (Amazon RDS PostgreSQL com `sslmode=require`, AWS Secrets Manager, ECS/Fargate e S3/EFS). Consulte o guia completo em [docs/evidencias-release-mvp.md](docs/evidencias-release-mvp.md).
 
 ---
 
@@ -209,3 +252,12 @@ npx expo start
   npm test
   npx tsc --noEmit
   ```
+
+---
+
+## 7. Roteiro E2E, Validação e Documentação de Release
+
+- **Roteiro cronometrado dos 19 passos (`AC-RELEASE`):** [docs/roteiro-demonstracao-e2e.md](docs/roteiro-demonstracao-e2e.md)
+- **Checklist executivo do projeto:** [docs/checklist-executivo.md](docs/checklist-executivo.md)
+- **Evidências da release MVP, arquitetura AWS e limitações conhecidas:** [docs/evidencias-release-mvp.md](docs/evidencias-release-mvp.md)
+- **Validação automatizada de infraestrutura:** `.\scripts\e2e-healthcheck.ps1` (Windows) / `./scripts/e2e-healthcheck.sh` (Linux/macOS)
