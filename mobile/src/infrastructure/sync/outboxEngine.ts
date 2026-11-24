@@ -9,7 +9,15 @@ import { OutboxRepository, outboxRepository as defaultOutboxRepo } from '../data
 import { InspectionRepository, inspectionRepository as defaultInspectionRepo } from '../database/repositories/inspectionRepository';
 import { NetworkMonitor, networkMonitor as defaultNetworkMonitor, type INetworkMonitor } from './networkMonitor';
 import { generateUUID } from './uuid';
-import { authStorage } from '../../features/auth/services/authStorage';
+import { ApiClient, ApiError, apiClient as defaultHttpClient } from '../http/apiClient';
+import {
+  buildEvidenceUploadFormData,
+  resolveStoredEvidenceUri,
+  type UploadEvidenceRequest,
+  type UploadEvidenceResponse,
+} from './evidenceMultipart';
+
+export type { UploadEvidenceRequest, UploadEvidenceResponse };
 
 export interface SyncBatchOperation {
   id: string; // UUID v4 idempotente
@@ -39,46 +47,67 @@ export interface SyncResult {
 
 export interface SyncApiClient {
   sendBatch(batch: SyncBatchRequest): Promise<SyncBatchResponse>;
+  uploadEvidence?(request: UploadEvidenceRequest): Promise<UploadEvidenceResponse>;
 }
 
 /**
- * Cliente HTTP padrão para o endpoint de sincronização em lote.
+ * Cliente HTTP padrão para o endpoint de sincronização em lote e upload multipart de evidências.
+ * Utiliza o ApiClient central para garantir renovação automática de JWT (401 -> refresh)
+ * e limpeza de sessão expirada.
  */
 export class HttpSyncApiClient implements SyncApiClient {
-  private baseUrl: string;
-  private getAccessTokenFn: () => Promise<string | null>;
+  private httpClient: ApiClient;
 
   constructor(
-    baseUrl: string = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080',
-    getAccessToken: () => Promise<string | null> = () => authStorage.getAccessToken()
+    baseUrl?: string,
+    getAccessToken?: () => Promise<string | null>,
+    httpClient?: ApiClient
   ) {
-    this.baseUrl = baseUrl;
-    this.getAccessTokenFn = getAccessToken;
+    if (httpClient) {
+      this.httpClient = httpClient;
+    } else if (!baseUrl && !getAccessToken) {
+      this.httpClient = defaultHttpClient;
+    } else {
+      this.httpClient = new ApiClient({
+        baseUrl: baseUrl || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080',
+        getAccessToken,
+      });
+    }
   }
 
   async sendBatch(batch: SyncBatchRequest): Promise<SyncBatchResponse> {
-    const url = `${this.baseUrl}/api/v1/sync/batch`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Idempotency-Key': batch.batch_id,
-    };
-    const token = await this.getAccessTokenFn();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    try {
+      return await this.httpClient.post<SyncBatchResponse>('/api/v1/sync/batch', batch, {
+        headers: {
+          'X-Idempotency-Key': batch.batch_id,
+        },
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(`Falha na sincronização (HTTP ${error.status}): ${error.message}`);
+      }
+      throw error;
     }
+  }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(batch),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      throw new Error(`Falha na sincronização (HTTP ${response.status}): ${errorText || response.statusText}`);
+  async uploadEvidence(request: UploadEvidenceRequest): Promise<UploadEvidenceResponse> {
+    const formData = await buildEvidenceUploadFormData(request);
+    try {
+      return await this.httpClient.post<UploadEvidenceResponse>('/api/v1/sync/upload', formData, {
+        headers: {
+          'X-Idempotency-Key': request.operationId,
+        },
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const wrapped = new Error(
+          `Falha no upload da evidência (HTTP ${error.status}): ${error.message}`
+        ) as Error & { status?: number };
+        wrapped.status = error.status;
+        throw wrapped;
+      }
+      throw error;
     }
-
-    return (await response.json()) as SyncBatchResponse;
   }
 }
 
@@ -221,99 +250,155 @@ export class OutboxEngine {
       };
     }
 
-    // 4. Marca operações como SYNCING no SQLite
+    // 4. Particiona entre uploads multipart (Fase A / Fase C) e mutações JSON em lote (Fase B)
+    const supportsMultipartUpload = typeof this.apiClient.uploadEvidence === 'function';
+    const preBatchEvidenceOps: OutboxOperation[] = [];
+    const postBatchEvidenceOps: OutboxOperation[] = [];
+    const jsonBatchOps: OutboxOperation[] = [];
+
     for (const op of batch) {
-      await this.outboxRepo.updateStatus(op.id, 'SYNCING');
-    }
-
-    // 5. Constrói payload com UUIDs idempotentes e timestamp do cliente
-    const batchId = generateUUID();
-    const batchRequest: SyncBatchRequest = {
-      batch_id: batchId,
-      operations: batch.map((op) => ({
-        id: op.id, // UUID v4 idempotente
-        entity_type: op.entity_type,
-        global_id: op.global_id,
-        operation_type: op.operation_type,
-        payload: op.payload,
-        client_timestamp: op.created_at ?? new Date().toISOString(),
-        dependencies: Array.isArray(op.dependencies) ? op.dependencies : [],
-      })),
-    };
-
-    // 6. Envio para a API
-    let apiResponse: SyncBatchResponse;
-    try {
-      apiResponse = await this.apiClient.sendBatch(batchRequest);
-    } catch (networkError: any) {
-      // RT-02: Erro temporário de rede não descarta a operação.
-      // Incrementa retries e mantém em PENDING ou ERROR no banco local.
-      const errorMsg = networkError?.message || 'Falha temporária de comunicação com o servidor';
-      for (const op of batch) {
-        await this.outboxRepo.incrementRetries(op.id, errorMsg);
-        await this.outboxRepo.updateStatus(op.id, 'ERROR', errorMsg);
+      if (supportsMultipartUpload && op.operation_type === 'UPLOAD_EVIDENCE') {
+        const parsed = this.parseOperationPayload(op.payload);
+        const ncId = parsed.nonConformityId ?? parsed.non_conformity_id ?? null;
+        if (ncId) {
+          postBatchEvidenceOps.push(op);
+        } else {
+          preBatchEvidenceOps.push(op);
+        }
+      } else {
+        jsonBatchOps.push(op);
       }
-
-      return {
-        success: false,
-        reason: 'NETWORK_ERROR',
-        message: `Falha de rede ao enviar lote: ${errorMsg}`,
-        processedCount: 0,
-        failedCount: batch.length,
-        syncedIds: [],
-        failedIds: batch.map((op) => op.id),
-      };
     }
 
-    // 7. Processamento dos resultados individuais da resposta
     const syncedIds: string[] = [];
     const failedIds: string[] = [];
     const errors: Array<{ operation_id: string; message?: string; error_code?: string }> = [];
 
-    // Mapeia resultados por operation_id
-    const resultsMap = new Map<string, { success: boolean; error_code?: string; message?: string }>();
-    if (Array.isArray(apiResponse.processed)) {
-      for (const item of apiResponse.processed) {
-        resultsMap.set(item.operation_id, item);
+    // Fase A: Envia evidências de itens/checklist antes do lote JSON (permite vincular responseId e validar PHOTO obrigatório)
+    for (const op of preBatchEvidenceOps) {
+      const outcome = await this.processEvidenceUploadOperation(op);
+      if (outcome.synced) {
+        syncedIds.push(op.id);
+      } else {
+        failedIds.push(op.id);
+        if (outcome.error) {
+          errors.push(outcome.error);
+        }
       }
     }
 
-    for (const op of batch) {
-      const result = resultsMap.get(op.id);
+    // Fase B: Envia mutações JSON via POST /api/v1/sync/batch
+    if (jsonBatchOps.length > 0) {
+      for (const op of jsonBatchOps) {
+        await this.outboxRepo.updateStatus(op.id, 'SYNCING');
+      }
 
-      // Se a operação foi processada com sucesso ou já havia sido processada anteriormente (idempotência)
-      if (result && (result.success || result.error_code === 'ALREADY_PROCESSED')) {
-        syncedIds.push(op.id);
-        // Operação confirmada sai da fila ativa (SPEC-002)
-        await this.outboxRepo.delete(op.id);
+      const batchId = generateUUID();
+      const batchRequest: SyncBatchRequest = {
+        batch_id: batchId,
+        operations: jsonBatchOps.map((op) => ({
+          id: op.id, // UUID v4 idempotente
+          entity_type: op.entity_type,
+          global_id: op.global_id,
+          operation_type: op.operation_type,
+          payload: op.payload,
+          client_timestamp: op.created_at ?? new Date().toISOString(),
+          dependencies: Array.isArray(op.dependencies) ? op.dependencies : [],
+        })),
+      };
 
-        // Atualiza status de sincronização da entidade de domínio se aplicável
-        await this.checkAndUpdateDomainEntitySyncStatus(op.entity_type, op.global_id);
-      } else {
-        // Falha no item individual
-        failedIds.push(op.id);
-        const itemMsg = result?.message || 'Erro não especificado retornado pela API';
-        const errorCode = result?.error_code || 'UNPROCESSABLE_ENTITY';
+      let apiResponse: SyncBatchResponse;
+      try {
+        apiResponse = await this.apiClient.sendBatch(batchRequest);
+      } catch (networkError: any) {
+        // RT-02: Erro temporário de rede não descarta a operação.
+        // Incrementa retries e mantém em PENDING ou ERROR no banco local.
+        const errorMsg = networkError?.message || 'Falha temporária de comunicação com o servidor';
+        for (const op of jsonBatchOps) {
+          await this.outboxRepo.incrementRetries(op.id, errorMsg);
+          await this.outboxRepo.updateStatus(op.id, 'ERROR', errorMsg);
+          failedIds.push(op.id);
+          errors.push({
+            operation_id: op.id,
+            message: errorMsg,
+            error_code: 'NETWORK_ERROR',
+          });
+        }
 
-        errors.push({
-          operation_id: op.id,
-          message: itemMsg,
-          error_code: errorCode,
-        });
+        if (syncedIds.length === 0) {
+          return {
+            success: false,
+            reason: 'NETWORK_ERROR',
+            message: `Falha de rede ao enviar lote: ${errorMsg}`,
+            processedCount: 0,
+            failedCount: failedIds.length,
+            syncedIds: [],
+            failedIds,
+          };
+        }
 
-        if (errorCode === 'CONFLICT') {
-          // Conflito permanente de negócio
-          await this.outboxRepo.updateStatus(op.id, 'CONFLICT', itemMsg);
-          if (op.entity_type === 'INSPECTION') {
-            await this.inspectionRepo.update(op.global_id, { sync_status: 'CONFLITO' }).catch(() => {});
-          }
+        return {
+          success: false,
+          reason: 'PARTIAL_ERROR',
+          message: `${syncedIds.length} operação(ões) sincronizada(s) com sucesso. ${failedIds.length} falha(s) registrada(s).`,
+          processedCount: syncedIds.length,
+          failedCount: failedIds.length,
+          syncedIds,
+          failedIds,
+          errors,
+        };
+      }
+
+      const resultsMap = new Map<string, { success: boolean; error_code?: string; message?: string }>();
+      if (Array.isArray(apiResponse.processed)) {
+        for (const item of apiResponse.processed) {
+          resultsMap.set(item.operation_id, item);
+        }
+      }
+
+      for (const op of jsonBatchOps) {
+        const result = resultsMap.get(op.id);
+
+        if (result && (result.success || result.error_code === 'ALREADY_PROCESSED')) {
+          syncedIds.push(op.id);
+          await this.outboxRepo.delete(op.id);
+          await this.checkAndUpdateDomainEntitySyncStatus(op.entity_type, op.global_id);
         } else {
-          // Erro retentável: incrementa retries e define status ERROR
-          await this.outboxRepo.incrementRetries(op.id, itemMsg);
-          await this.outboxRepo.updateStatus(op.id, 'ERROR', itemMsg);
-          if (op.entity_type === 'INSPECTION') {
-            await this.inspectionRepo.update(op.global_id, { sync_status: 'ERRO' }).catch(() => {});
+          failedIds.push(op.id);
+          const itemMsg = result?.message || 'Erro não especificado retornado pela API';
+          const errorCode = result?.error_code || 'UNPROCESSABLE_ENTITY';
+
+          errors.push({
+            operation_id: op.id,
+            message: itemMsg,
+            error_code: errorCode,
+          });
+
+          if (errorCode === 'CONFLICT') {
+            await this.outboxRepo.updateStatus(op.id, 'CONFLICT', itemMsg);
+            if (op.entity_type === 'INSPECTION') {
+              await this.inspectionRepo.update(op.global_id, { sync_status: 'CONFLITO' }).catch(() => {});
+            }
+          } else {
+            await this.outboxRepo.incrementRetries(op.id, itemMsg);
+            await this.outboxRepo.updateStatus(op.id, 'ERROR', itemMsg);
+            if (op.entity_type === 'INSPECTION') {
+              await this.inspectionRepo.update(op.global_id, { sync_status: 'ERRO' }).catch(() => {});
+            }
           }
+        }
+      }
+    }
+
+    // Fase C: Envia evidências vinculadas a Não Conformidades após a criação da NC no lote JSON
+    for (const op of postBatchEvidenceOps) {
+      const outcome = await this.processEvidenceUploadOperation(op);
+      if (outcome.synced) {
+        syncedIds.push(op.id);
+      } else {
+        failedIds.push(op.id);
+        if (outcome.error) {
+          errors.push(outcome.error);
         }
       }
     }
@@ -336,6 +421,164 @@ export class OutboxEngine {
       failedIds,
       errors: errors.length > 0 ? errors : undefined,
     };
+  }
+
+  private parseOperationPayload(raw: string): Record<string, any> {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private async resolveRemoteInspectionId(
+    localOrRemoteId?: string | null,
+    remoteHint?: string | null
+  ): Promise<string> {
+    if (typeof remoteHint === 'string' && remoteHint.trim().length > 0) {
+      return remoteHint.trim();
+    }
+    if (typeof localOrRemoteId === 'string' && localOrRemoteId.trim().length > 0) {
+      const trimmed = localOrRemoteId.trim();
+      const localInspection = await this.inspectionRepo.findById(trimmed).catch(() => null);
+      if (localInspection?.remote_id) {
+        return localInspection.remote_id;
+      }
+      return trimmed;
+    }
+    return '';
+  }
+
+  private async processEvidenceUploadOperation(op: OutboxOperation): Promise<{
+    synced: boolean;
+    error?: { operation_id: string; message?: string; error_code?: string };
+  }> {
+    await this.outboxRepo.updateStatus(op.id, 'SYNCING');
+
+    const payload = this.parseOperationPayload(op.payload);
+    const evidenceId = String(payload.evidenceId || payload.evidence_id || op.global_id || '').trim();
+    const localRecord = evidenceId
+      ? await this.outboxRepo.findLocalEvidenceFile(evidenceId).catch(() => null)
+      : null;
+
+    const rawInspectionId =
+      payload.remoteInspectionId ||
+      payload.inspectionId ||
+      payload.inspection_id ||
+      localRecord?.inspection_id ||
+      '';
+    const inspectionId = await this.resolveRemoteInspectionId(
+      rawInspectionId,
+      payload.remoteInspectionId
+    );
+    const itemId = payload.itemId ?? payload.item_id ?? localRecord?.item_id ?? null;
+    const nonConformityId =
+      payload.nonConformityId ??
+      payload.non_conformity_id ??
+      localRecord?.non_conformity_id ??
+      null;
+    const fileName = String(
+      payload.fileName || payload.file_name || localRecord?.file_name || `${evidenceId || 'evidencia'}.jpg`
+    );
+    const mimeType = String(
+      payload.mimeType || payload.mime_type || localRecord?.mime_type || 'image/jpeg'
+    );
+    const clientTimestamp =
+      payload.createdAt || payload.clientTimestamp || op.created_at || new Date().toISOString();
+    const description = payload.description ?? null;
+
+    let localUri = localRecord?.local_uri || '';
+    if (!localUri && fileName) {
+      const candidateWebUri = `fieldops-web://documents/evidences/${fileName}`;
+      if (resolveStoredEvidenceUri(candidateWebUri) !== candidateWebUri) {
+        localUri = candidateWebUri;
+      }
+    }
+
+    if (!evidenceId || !inspectionId || !localUri) {
+      const errMsg = !localUri
+        ? 'Arquivo local da evidência não encontrado no dispositivo.'
+        : 'Metadados obrigatórios da evidência ausentes para upload.';
+      if (evidenceId) {
+        await this.outboxRepo
+          .updateLocalEvidenceSyncStatus(evidenceId, 'FAILED', { errorMessage: errMsg })
+          .catch(() => {});
+      }
+      await this.outboxRepo.incrementRetries(op.id, errMsg);
+      await this.outboxRepo.updateStatus(op.id, 'ERROR', errMsg);
+      return {
+        synced: false,
+        error: {
+          operation_id: op.id,
+          message: errMsg,
+          error_code: 'MISSING_LOCAL_EVIDENCE',
+        },
+      };
+    }
+
+    await this.outboxRepo.updateLocalEvidenceSyncStatus(evidenceId, 'UPLOADING').catch(() => {});
+
+    try {
+      const uploadResponse = await this.apiClient.uploadEvidence!({
+        operationId: op.id,
+        evidenceId,
+        inspectionId,
+        itemId,
+        nonConformityId,
+        fileName,
+        mimeType,
+        localUri,
+        clientTimestamp,
+        description,
+      });
+
+      await this.outboxRepo
+        .updateLocalEvidenceSyncStatus(evidenceId, 'UPLOADED', {
+          remoteKey: uploadResponse?.storage_key ?? uploadResponse?.storageKey ?? null,
+          remoteUrl: uploadResponse?.url ?? null,
+          errorMessage: null,
+        })
+        .catch(() => {});
+
+      await this.outboxRepo.delete(op.id);
+      await this.checkAndUpdateDomainEntitySyncStatus(
+        'INSPECTION',
+        localRecord?.inspection_id || rawInspectionId || inspectionId
+      );
+
+      return { synced: true };
+    } catch (err: any) {
+      const statusCode = typeof err?.status === 'number' ? err.status : undefined;
+      const errMsg = err?.message || 'Falha ao enviar fotografia de evidência.';
+
+      await this.outboxRepo
+        .updateLocalEvidenceSyncStatus(evidenceId, 'FAILED', { errorMessage: errMsg })
+        .catch(() => {});
+
+      if (statusCode === 409) {
+        await this.outboxRepo.updateStatus(op.id, 'CONFLICT', errMsg);
+        return {
+          synced: false,
+          error: {
+            operation_id: op.id,
+            message: errMsg,
+            error_code: 'CONFLICT',
+          },
+        };
+      }
+
+      await this.outboxRepo.incrementRetries(op.id, errMsg);
+      await this.outboxRepo.updateStatus(op.id, 'ERROR', errMsg);
+      return {
+        synced: false,
+        error: {
+          operation_id: op.id,
+          message: errMsg,
+          error_code: 'UPLOAD_FAILED',
+        },
+      };
+    }
   }
 
   /**

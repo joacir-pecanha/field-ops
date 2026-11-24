@@ -284,6 +284,107 @@ export class OutboxRepository {
   }
 
   /**
+   * Busca metadados e URI local de uma evidência armazenada em `evidence_files` ou `inspection_evidences`.
+   */
+  async findLocalEvidenceFile(evidenceId: string): Promise<{
+    id: string;
+    inspection_id: string;
+    item_id: string | null;
+    non_conformity_id: string | null;
+    local_uri: string;
+    file_name: string | null;
+    mime_type: string | null;
+  } | null> {
+    const db = await this.getDb();
+
+    try {
+      const fromFiles = await db.getFirstAsync<{
+        id: string;
+        inspection_id: string;
+        item_id: string | null;
+        non_conformity_id: string | null;
+        local_uri: string;
+        file_name: string | null;
+        mime_type: string | null;
+      }>(
+        `SELECT id, inspection_id, item_id, non_conformity_id, local_uri, file_name, mime_type
+         FROM evidence_files
+         WHERE id = ?;`,
+        [evidenceId]
+      );
+      if (fromFiles) {
+        return fromFiles;
+      }
+    } catch {
+      // Tabela evidence_files é criada sob demanda e pode ainda não existir
+    }
+
+    const fromLegacy = await db.getFirstAsync<{
+      id: string;
+      inspection_id: string;
+      item_id: string | null;
+      local_uri: string;
+      mime_type: string | null;
+    }>(
+      `SELECT id, inspection_id, item_id, local_uri, mime_type
+       FROM inspection_evidences
+       WHERE id = ?;`,
+      [evidenceId]
+    );
+
+    if (!fromLegacy) {
+      return null;
+    }
+
+    return {
+      ...fromLegacy,
+      non_conformity_id: null,
+      file_name: `${fromLegacy.id}.jpg`,
+    };
+  }
+
+  /**
+   * Atualiza o status de envio de uma evidência local nas tabelas `evidence_files` e `inspection_evidences`.
+   */
+  async updateLocalEvidenceSyncStatus(
+    evidenceId: string,
+    status: 'UPLOADING' | 'UPLOADED' | 'FAILED',
+    details?: {
+      remoteKey?: string | null;
+      remoteUrl?: string | null;
+      errorMessage?: string | null;
+    }
+  ): Promise<void> {
+    const db = await this.getDb();
+    const errorMessage = details?.errorMessage ?? null;
+
+    try {
+      await db.runAsync(
+        'UPDATE evidence_files SET status = ?, error_message = ? WHERE id = ?;',
+        [status, errorMessage, evidenceId]
+      );
+    } catch {
+      // Ignora caso evidence_files ainda não exista
+    }
+
+    await db.runAsync(
+      `UPDATE inspection_evidences
+       SET status = ?,
+           remote_key = COALESCE(?, remote_key),
+           remote_url = COALESCE(?, remote_url),
+           error_message = ?
+       WHERE id = ?;`,
+      [
+        status,
+        details?.remoteKey ?? null,
+        details?.remoteUrl ?? null,
+        errorMessage,
+        evidenceId,
+      ]
+    );
+  }
+
+  /**
    * Retorna a contagem de operações pendentes na fila.
    */
   async countPending(): Promise<number> {

@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { runMigrations } from '../../src/infrastructure/database/migrations';
+import { clearLocalDatabaseData } from '../../src/infrastructure/database/db';
 import { InspectionRepository } from '../../src/infrastructure/database/repositories/inspectionRepository';
 import { OutboxRepository } from '../../src/infrastructure/database/repositories/outboxRepository';
+import { ApiClient } from '../../src/infrastructure/http/apiClient';
 import { NetworkMonitor } from '../../src/infrastructure/sync/networkMonitor';
 import {
+  HttpSyncApiClient,
   OutboxEngine,
   type SyncApiClient,
   type SyncBatchRequest,
@@ -453,5 +456,344 @@ describe('Motor de Sincronização Outbox (SPEC-002 / TASK-002)', () => {
     assert.equal(await outboxRepo.findById('op-old-error'), null);
     assert.equal(await outboxRepo.findById('op-old-conflict'), null);
     assert.ok(await outboxRepo.findById('op-keep-pending'));
+  });
+
+  test('HttpSyncApiClient renova token JWT automaticamente ao receber HTTP 401 e reenvia com X-Idempotency-Key', async () => {
+    let currentAccessToken = 'expired-access-token';
+    const calls: Array<{ url: string; auth?: string; idempotencyKey?: string }> = [];
+
+    const mockFetch: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      calls.push({
+        url,
+        auth: headers['Authorization'],
+        idempotencyKey: headers['X-Idempotency-Key'],
+      });
+
+      if (url.endsWith('/api/v1/auth/refresh')) {
+        return new Response(
+          JSON.stringify({ accessToken: 'fresh-access-token', refreshToken: 'fresh-refresh-token' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (headers['Authorization'] === 'Bearer expired-access-token') {
+        return new Response(
+          JSON.stringify({ status: 401, code: 'UNAUTHORIZED', detail: 'Token expirado' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ processed: [{ operation_id: 'op-401-retry', success: true }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    const apiClientWith401 = new ApiClient({
+      baseUrl: 'http://localhost:8080',
+      getAccessToken: async () => currentAccessToken,
+      getRefreshToken: async () => 'valid-refresh-token',
+      onTokenRefreshed: async (tokens) => {
+        currentAccessToken = tokens.accessToken;
+      },
+      customFetch: mockFetch,
+    });
+
+    const syncClient = new HttpSyncApiClient(undefined, undefined, apiClientWith401);
+    const response = await syncClient.sendBatch({
+      batch_id: 'batch-123',
+      operations: [
+        {
+          id: 'op-401-retry',
+          entity_type: 'INSPECTION',
+          global_id: 'insp-123',
+          operation_type: 'START_INSPECTION',
+          payload: '{}',
+          client_timestamp: '2026-11-24T12:00:00Z',
+        },
+      ],
+    });
+
+    assert.equal(response.processed.length, 1);
+    assert.equal(response.processed[0].success, true);
+    assert.equal(calls.length, 3);
+    assert.equal(calls[0].auth, 'Bearer expired-access-token');
+    assert.equal(calls[1].url, 'http://localhost:8080/api/v1/auth/refresh');
+    assert.equal(calls[2].auth, 'Bearer fresh-access-token');
+    assert.equal(calls[2].idempotencyKey, 'batch-123');
+  });
+
+  test('clearLocalDatabaseData limpa inspeções e fila outbox respeitando foreign_keys = ON', async () => {
+    await inspectionRepo.create({
+      id: 'insp-clear-1',
+      template_id: 'tmpl-1',
+      client_name: 'Cliente X',
+      site_name: 'Site Y',
+      equipment_name: 'Gerador Z',
+      status: 'ENVIADA',
+      sync_status: 'ERRO',
+    });
+
+    await outboxRepo.create({
+      id: 'op-clear-1',
+      entity_type: 'INSPECTION',
+      global_id: 'insp-clear-1',
+      operation_type: 'START_INSPECTION',
+      payload: '{}',
+      status: 'ERROR',
+    });
+
+    await clearLocalDatabaseData(db);
+
+    assert.equal(await inspectionRepo.findById('insp-clear-1'), null);
+    assert.equal(await outboxRepo.countPending(), 0);
+    assert.equal((await outboxRepo.findAll()).length, 0);
+  });
+
+  test('ApiClient com FormData omite Content-Type JSON e preserva Authorization e X-Idempotency-Key', async () => {
+    let capturedHeaders: Record<string, string> = {};
+    let capturedBody: unknown = null;
+
+    const client = new ApiClient({
+      baseUrl: 'http://localhost:8080',
+      getAccessToken: async () => 'token-multipart-123',
+      customFetch: async (_url, init) => {
+        capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
+        capturedBody = init?.body;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' }), 'foto.jpg');
+    form.append('inspectionId', 'insp-1');
+
+    const res = await client.post<{ ok: boolean }>('/api/v1/sync/upload', form, {
+      headers: { 'X-Idempotency-Key': 'op-multipart-1' },
+    });
+
+    assert.equal(res.ok, true);
+    assert.equal(capturedHeaders['Content-Type'], undefined);
+    assert.equal(capturedHeaders['Authorization'], 'Bearer token-multipart-123');
+    assert.equal(capturedHeaders['X-Idempotency-Key'], 'op-multipart-1');
+    assert.ok(capturedBody instanceof FormData);
+  });
+
+  test('HttpSyncApiClient.uploadEvidence decodifica Data URL do armazenamento Web e envia multipart para /api/v1/sync/upload', async () => {
+    const previousStorage = (globalThis as { localStorage?: Storage }).localStorage;
+    const storageMap = new Map<string, string>();
+    const webUri = 'fieldops-web://documents/evidences/ev-100.jpg';
+    const tinyJpegBase64 = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+    storageMap.set(
+      'fieldops:web_evidence_files:v1',
+      JSON.stringify({
+        [webUri]: {
+          dataUrl: `data:image/jpeg;base64,${tinyJpegBase64}`,
+          size: 120,
+          createdAt: '2026-11-24T12:00:00Z',
+        },
+      })
+    );
+
+    (globalThis as { localStorage?: Storage }).localStorage = {
+      getItem: (k: string) => storageMap.get(k) ?? null,
+      setItem: (k: string, v: string) => void storageMap.set(k, v),
+      removeItem: (k: string) => void storageMap.delete(k),
+      clear: () => storageMap.clear(),
+      key: (idx: number) => Array.from(storageMap.keys())[idx] ?? null,
+      get length() {
+        return storageMap.size;
+      },
+    };
+
+    try {
+      let calledUrl = '';
+      const captured: { form: FormData | null; idempotency: string } = {
+        form: null,
+        idempotency: '',
+      };
+
+      const apiClient = new ApiClient({
+        baseUrl: 'http://localhost:8080',
+        getAccessToken: async () => 'jwt-tech',
+        customFetch: async (input, init) => {
+          calledUrl = typeof input === 'string' ? input : input.toString();
+          captured.form = (init?.body as FormData) ?? null;
+          captured.idempotency =
+            ((init?.headers ?? {}) as Record<string, string>)['X-Idempotency-Key'] ?? '';
+          return new Response(
+            JSON.stringify({
+              evidenceId: 'ev-100',
+              status: 'UPLOADED',
+              storageKey: 'insp-100/ev-100.jpg',
+            }),
+            { status: 201, headers: { 'Content-Type': 'application/json' } }
+          );
+        },
+      });
+
+      const syncClient = new HttpSyncApiClient(undefined, undefined, apiClient);
+      const response = await syncClient.uploadEvidence({
+        operationId: 'op-ev-100',
+        evidenceId: 'ev-100',
+        inspectionId: 'insp-100',
+        itemId: 'item-100',
+        fileName: 'ev-100.jpg',
+        mimeType: 'image/jpeg',
+        localUri: webUri,
+        clientTimestamp: '2026-11-24T12:00:00Z',
+      });
+
+      assert.equal(calledUrl, 'http://localhost:8080/api/v1/sync/upload');
+      assert.equal(captured.idempotency, 'op-ev-100');
+      assert.equal(response.status, 'UPLOADED');
+      assert.ok(captured.form instanceof FormData);
+      const form = captured.form;
+      assert.equal(form.get('inspectionId'), 'insp-100');
+      assert.equal(form.get('evidenceId'), 'ev-100');
+      assert.equal(form.get('operationId'), 'op-ev-100');
+      assert.equal(form.get('itemId'), 'item-100');
+      const uploadedFile = form.get('file');
+      assert.ok(uploadedFile instanceof Blob);
+      assert.ok((uploadedFile as Blob).size > 0);
+    } finally {
+      (globalThis as { localStorage?: Storage }).localStorage = previousStorage;
+    }
+  });
+
+  test('OutboxEngine envia UPLOAD_EVIDENCE via multipart na ordem causal (item -> batch JSON -> não conformidade) e atualiza status para UPLOADED', async () => {
+    await inspectionRepo.create({
+      id: 'insp-media-1',
+      remote_id: 'remote-insp-media-1',
+      template_id: 'tmpl-1',
+      client_name: 'Indústria Alfa',
+      site_name: 'Planta Sorocaba',
+      equipment_name: 'Gerador GD-001',
+      status: 'ENVIADA',
+      sync_status: 'PENDENTE',
+    });
+
+    await db.runAsync(
+      `INSERT INTO checklist_sections (id, inspection_id, title, order_index)
+       VALUES (?, ?, ?, ?);`,
+      ['sec-1', 'insp-media-1', 'Seção Visual', 0]
+    );
+
+    await db.runAsync(
+      `INSERT INTO checklist_items (id, section_id, inspection_id, title, response_type, required, order_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?);`,
+      ['snap-item-1', 'sec-1', 'insp-media-1', 'Lacre externo', 'CONFORMITY', 1, 0]
+    );
+
+    await db.runAsync(
+      `INSERT INTO inspection_evidences (id, inspection_id, item_id, local_uri, file_size, mime_type, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?);`,
+      ['ev-item-1', 'insp-media-1', 'snap-item-1', 'file:///docs/ev-item-1.jpg', 1024, 'image/jpeg', 'PENDING']
+    );
+
+    await db.runAsync(
+      `INSERT INTO inspection_evidences (id, inspection_id, item_id, local_uri, file_size, mime_type, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?);`,
+      ['ev-nc-1', 'insp-media-1', 'snap-item-1', 'file:///docs/ev-nc-1.jpg', 2048, 'image/jpeg', 'PENDING']
+    );
+
+    await outboxRepo.create({
+      id: 'op-ev-item-1',
+      entity_type: 'EVIDENCE',
+      global_id: 'ev-item-1',
+      operation_type: 'UPLOAD_EVIDENCE',
+      payload: JSON.stringify({
+        evidenceId: 'ev-item-1',
+        inspectionId: 'insp-media-1',
+        itemId: 'snap-item-1',
+        fileName: 'ev-item-1.jpg',
+        mimeType: 'image/jpeg',
+      }),
+      status: 'PENDING',
+      created_at: '2026-11-24T12:01:00Z',
+    });
+
+    await outboxRepo.create({
+      id: 'op-nc-create-1',
+      entity_type: 'NON_CONFORMITY',
+      global_id: 'nc-1',
+      operation_type: 'CREATE_NON_CONFORMITY',
+      payload: JSON.stringify({ id: 'nc-1', inspectionId: 'insp-media-1', title: 'Vazamento', severity: 'ALTA' }),
+      status: 'PENDING',
+      created_at: '2026-11-24T12:02:00Z',
+    });
+
+    await outboxRepo.create({
+      id: 'op-ev-nc-1',
+      entity_type: 'EVIDENCE',
+      global_id: 'ev-nc-1',
+      operation_type: 'UPLOAD_EVIDENCE',
+      payload: JSON.stringify({
+        evidenceId: 'ev-nc-1',
+        inspectionId: 'insp-media-1',
+        itemId: 'snap-item-1',
+        nonConformityId: 'nc-1',
+        fileName: 'ev-nc-1.jpg',
+        mimeType: 'image/jpeg',
+      }),
+      status: 'PENDING',
+      created_at: '2026-11-24T12:03:00Z',
+    });
+
+    const timeline: string[] = [];
+    const customApi: SyncApiClient = {
+      async sendBatch(batch) {
+        timeline.push(`batch:${batch.operations.map((o) => o.id).join(',')}`);
+        return {
+          processed: batch.operations.map((op) => ({ operation_id: op.id, success: true })),
+        };
+      },
+      async uploadEvidence(req) {
+        timeline.push(`upload:${req.evidenceId}:${req.inspectionId}`);
+        return {
+          evidenceId: req.evidenceId,
+          status: 'UPLOADED',
+          storageKey: `${req.inspectionId}/${req.evidenceId}.jpg`,
+        };
+      },
+    };
+
+    const engineWithUpload = new OutboxEngine({
+      outboxRepository: outboxRepo,
+      inspectionRepository: inspectionRepo,
+      networkMonitor,
+      apiClient: customApi,
+      autoSyncOnReconnect: false,
+    });
+
+    const result = await engineWithUpload.sync();
+
+    assert.equal(result.success, true);
+    assert.equal(result.processedCount, 3);
+    assert.equal(result.failedCount, 0);
+    assert.deepEqual(timeline, [
+      'upload:ev-item-1:remote-insp-media-1',
+      'batch:op-nc-create-1',
+      'upload:ev-nc-1:remote-insp-media-1',
+    ]);
+    assert.equal(await outboxRepo.countPending(), 0);
+
+    const updatedEv1 = await db.getFirstAsync<{ status: string; remote_key: string }>(
+      'SELECT status, remote_key FROM inspection_evidences WHERE id = ?;',
+      ['ev-item-1']
+    );
+    const updatedEv2 = await db.getFirstAsync<{ status: string; remote_key: string }>(
+      'SELECT status, remote_key FROM inspection_evidences WHERE id = ?;',
+      ['ev-nc-1']
+    );
+    assert.equal(updatedEv1?.status, 'UPLOADED');
+    assert.equal(updatedEv1?.remote_key, 'remote-insp-media-1/ev-item-1.jpg');
+    assert.equal(updatedEv2?.status, 'UPLOADED');
+    assert.equal(updatedEv2?.remote_key, 'remote-insp-media-1/ev-nc-1.jpg');
   });
 });

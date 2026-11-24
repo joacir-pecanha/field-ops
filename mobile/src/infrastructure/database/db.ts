@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { store } from './memoryStore';
 
 export const DATABASE_NAME = 'fieldops.db';
 
@@ -66,4 +67,31 @@ export const closeDatabase = async (): Promise<void> => {
 export const setDatabaseInstance = (db: SQLiteDatabase | null): void => {
   dbInstance = db;
   dbPromise = db ? Promise.resolve(db) : null;
+};
+
+/**
+ * Remove todos os dados operacionais locais do SQLite (e da memória) em ordem compatível
+ * com PRAGMA foreign_keys = ON, mantendo a sessão de usuário intacta.
+ */
+export const clearLocalDatabaseData = async (dbOverride?: SQLiteDatabase): Promise<void> => {
+  const db = dbOverride ?? (await getDatabase());
+  const tablesToClear = [
+    'outbox_operations',
+    'inspection_evidences',
+    'checklist_responses',
+    'checklist_items',
+    'checklist_sections',
+    'inspections',
+  ];
+
+  await db.execAsync('PRAGMA foreign_keys = ON;');
+  try {
+    await db.runAsync('DELETE FROM evidence_files;');
+  } catch {
+    // Tabela evidence_files pode ainda não ter sido criada
+  }
+  for (const table of tablesToClear) {
+    await db.runAsync(`DELETE FROM ${table};`);
+  }
+  store.clear();
 };
