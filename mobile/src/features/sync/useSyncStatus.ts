@@ -23,6 +23,7 @@ export interface SyncState {
     message: string,
     timestamp?: string
   ) => void;
+  resetSyncFeedback: () => void;
   incrementSyncedCount: (amount: number) => void;
 }
 
@@ -45,6 +46,7 @@ export const useSyncStore = create<SyncState>((set) => ({
     set((state) => (state.isOnline === isOnline ? state : { isOnline })),
   setLastSync: (result, message, timestamp = new Date().toISOString()) =>
     set({ lastSyncResult: result, lastSyncMessage: message, lastSyncAt: timestamp }),
+  resetSyncFeedback: () => set({ lastSyncResult: null, lastSyncMessage: null }),
   incrementSyncedCount: (amount) =>
     set((state) => ({ syncedCount: state.syncedCount + amount })),
 }));
@@ -117,6 +119,18 @@ export function useSyncStatus() {
     [refreshStatus]
   );
 
+  const clearFailedOperations = useCallback(async () => {
+    await outboxRepository.deleteFailed();
+    useSyncStore.getState().resetSyncFeedback();
+    await refreshStatus();
+  }, [refreshStatus]);
+
+  const clearAllOperations = useCallback(async () => {
+    await outboxRepository.deleteAll();
+    useSyncStore.getState().resetSyncFeedback();
+    await refreshStatus();
+  }, [refreshStatus]);
+
   useEffect(() => {
     refreshStatus();
 
@@ -142,5 +156,7 @@ export function useSyncStatus() {
     syncNow,
     refreshStatus,
     setMockOnline,
+    clearFailedOperations,
+    clearAllOperations,
   };
 }

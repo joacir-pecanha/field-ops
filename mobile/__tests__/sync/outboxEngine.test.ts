@@ -385,4 +385,73 @@ describe('Motor de Sincronização Outbox (SPEC-002 / TASK-002)', () => {
     // Apenas 1 requisição foi enviada à API
     assert.equal(mockApiClient.dispatchedBatches.length, 1);
   });
+
+  test('Priorização: operações PENDING não ficam bloqueadas por operações antigas em ERROR e deleteFailed limpa apenas falhas', async () => {
+    const limitedEngine = new OutboxEngine({
+      outboxRepository: outboxRepo,
+      inspectionRepository: inspectionRepo,
+      networkMonitor,
+      apiClient: mockApiClient,
+      batchSize: 1,
+      autoSyncOnReconnect: false,
+    });
+
+    await outboxRepo.create({
+      id: 'op-old-error',
+      entity_type: 'INSPECTION',
+      global_id: 'insp-old',
+      operation_type: 'START_INSPECTION',
+      payload: '{}',
+      status: 'ERROR',
+      retries: 5,
+      error_message: 'Inspeção não encontrada',
+      created_at: '2026-11-15T11:52:11.000Z',
+    });
+
+    await outboxRepo.create({
+      id: 'op-old-conflict',
+      entity_type: 'INSPECTION',
+      global_id: 'insp-old-conflict',
+      operation_type: 'COMPLETE_INSPECTION',
+      payload: '{}',
+      status: 'CONFLICT',
+      retries: 1,
+      error_message: 'Conflito permanente',
+      created_at: '2026-11-15T11:55:00.000Z',
+    });
+
+    await outboxRepo.create({
+      id: 'op-new-pending',
+      entity_type: 'INSPECTION',
+      global_id: 'insp-new',
+      operation_type: 'START_INSPECTION',
+      payload: '{}',
+      status: 'PENDING',
+      created_at: '2026-11-24T11:00:00.000Z',
+    });
+
+    const result = await limitedEngine.sync();
+
+    assert.equal(result.success, true);
+    assert.equal(result.processedCount, 1);
+    assert.equal(mockApiClient.dispatchedBatches[0].operations[0].id, 'op-new-pending');
+    assert.equal(await outboxRepo.findById('op-new-pending'), null);
+    assert.ok(await outboxRepo.findById('op-old-error'));
+
+    // Recria uma PENDING para validar que deleteFailed() remove ERROR e CONFLICT mantendo PENDING
+    await outboxRepo.create({
+      id: 'op-keep-pending',
+      entity_type: 'INSPECTION',
+      global_id: 'insp-keep',
+      operation_type: 'START_INSPECTION',
+      payload: '{}',
+      status: 'PENDING',
+    });
+
+    await outboxRepo.deleteFailed();
+
+    assert.equal(await outboxRepo.findById('op-old-error'), null);
+    assert.equal(await outboxRepo.findById('op-old-conflict'), null);
+    assert.ok(await outboxRepo.findById('op-keep-pending'));
+  });
 });

@@ -86,13 +86,16 @@ export class OutboxRepository {
   }
 
   /**
-   * Retorna operações pendentes ou em erro prontas para envio, ordenadas por created_at ASC.
+   * Retorna operações pendentes ou em erro prontas para envio, priorizando PENDING sobre ERROR
+   * para evitar que falhas antigas bloqueiem mutações novas (head-of-line blocking), mantendo FIFO.
    * Utiliza índice idx_outbox_status_created para alta performance.
    */
   async findPendingOperations(): Promise<OutboxOperation[]> {
     const db = await this.getDb();
     const rows = await db.getAllAsync<OutboxRow>(
-      "SELECT * FROM outbox_operations WHERE status IN ('PENDING', 'ERROR') ORDER BY created_at ASC;"
+      `SELECT * FROM outbox_operations
+       WHERE status IN ('PENDING', 'ERROR')
+       ORDER BY CASE WHEN status = 'PENDING' THEN 0 ELSE 1 END ASC, created_at ASC;`
     );
     return rows.map(mapRowToOutboxOperation);
   }
@@ -262,6 +265,14 @@ export class OutboxRepository {
   async deleteCompleted(): Promise<void> {
     const db = await this.getDb();
     await db.runAsync("DELETE FROM outbox_operations WHERE status = 'SYNCED';");
+  }
+
+  /**
+   * Remove operações em erro ou conflito permanente da fila outbox.
+   */
+  async deleteFailed(): Promise<void> {
+    const db = await this.getDb();
+    await db.runAsync("DELETE FROM outbox_operations WHERE status IN ('ERROR', 'CONFLICT');");
   }
 
   /**

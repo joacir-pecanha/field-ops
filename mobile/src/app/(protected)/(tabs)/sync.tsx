@@ -7,6 +7,8 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  Platform,
 } from 'react-native';
 import { tokens } from '@/design-system/tokens';
 import { Card } from '@/design-system/components/Card';
@@ -15,6 +17,24 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSyncStatus } from '@/features/sync';
 import { useFocusEffect } from 'expo-router';
 import { type OutboxOperation } from '@/infrastructure/database';
+
+function confirmAction(title: string, message: string, onConfirm: () => void | Promise<void>) {
+  if (Platform.OS === 'web') {
+    const confirmed =
+      typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? window.confirm(`${title}\n\n${message}`)
+        : true;
+    if (confirmed) {
+      void onConfirm();
+    }
+    return;
+  }
+
+  Alert.alert(title, message, [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Confirmar', style: 'destructive', onPress: () => void onConfirm() },
+  ]);
+}
 
 export default function SyncScreen() {
   const {
@@ -30,6 +50,8 @@ export default function SyncScreen() {
     syncNow,
     refreshStatus,
     setMockOnline,
+    clearFailedOperations,
+    clearAllOperations,
   } = useSyncStatus();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -49,6 +71,22 @@ export default function SyncScreen() {
 
   const handleManualSync = async () => {
     await syncNow();
+  };
+
+  const handleClearFailed = () => {
+    confirmAction(
+      'Limpar Operações com Erro',
+      `Deseja remover ${errorCount} operação(ões) com erro/conflito da fila local? As operações pendentes serão mantidas.`,
+      clearFailedOperations
+    );
+  };
+
+  const handleClearAll = () => {
+    confirmAction(
+      'Limpar Toda a Fila Outbox',
+      `Deseja descartar todas as ${operations.length} operação(ões) da fila local? Use apenas para reiniciar testes em ambiente de desenvolvimento.`,
+      clearAllOperations
+    );
   };
 
   const toggleOfflineSimulation = () => {
@@ -287,6 +325,29 @@ export default function SyncScreen() {
         style={styles.syncButton}
       />
 
+      {(errorCount > 0 || operations.length > 0) && (
+        <View style={styles.recoveryActionsRow}>
+          {errorCount > 0 && (
+            <Button
+              title={`Limpar Erros (${errorCount})`}
+              onPress={handleClearFailed}
+              variant="danger"
+              disabled={isSyncing}
+              style={styles.recoveryButton}
+            />
+          )}
+          {operations.length > 0 && (
+            <Button
+              title="Limpar Toda a Fila"
+              onPress={handleClearAll}
+              variant="secondary"
+              disabled={isSyncing}
+              style={styles.recoveryButton}
+            />
+          )}
+        </View>
+      )}
+
       {/* Lista de Operações da Fila Outbox */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Fila de Operações Outbox</Text>
@@ -508,8 +569,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   syncButton: {
-    marginBottom: tokens.spacing.l,
+    marginBottom: tokens.spacing.s,
     width: '100%',
+  },
+  recoveryActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: tokens.spacing.s,
+    marginBottom: tokens.spacing.l,
+  },
+  recoveryButton: {
+    flex: 1,
+    minWidth: 160,
   },
   sectionHeader: {
     marginBottom: tokens.spacing.s,
