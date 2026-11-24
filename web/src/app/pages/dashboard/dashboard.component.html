@@ -1,0 +1,172 @@
+<section class="master-page dashboard-page" data-testid="dashboard-page">
+  <header class="page-header-bar">
+    <div>
+      <h1>Painel Operacional FieldOps</h1>
+      <p>
+        Visão executiva de {{ currentUser()?.name || 'Supervisão' }} ({{ roleLabel() }}) sobre
+        inspeções programadas, revisões e não conformidades.
+      </p>
+    </div>
+
+    <div class="refresh-meta">
+      @if (lastUpdatedAt(); as updatedAt) {
+        <span class="updated-pill" data-testid="dashboard-last-updated">
+          Atualizado às {{ updatedAt | date: 'HH:mm:ss' }}
+        </span>
+      }
+
+      <button
+        type="button"
+        class="btn btn-secondary"
+        [disabled]="loading() || refreshing()"
+        (click)="refreshData()"
+        data-testid="dashboard-refresh-btn"
+      >
+        @if (refreshing()) {
+          <span class="inline-spinner" style="border-top-color: #0f172a; border-color: #cbd5e1"></span>
+          Atualizando...
+        } @else {
+          Atualizar dados
+        }
+      </button>
+    </div>
+  </header>
+
+  @if (loadError()) {
+    <div class="alert-banner alert-error" role="alert" data-testid="dashboard-error-banner">
+      <div>
+        <strong>Falha ao carregar métricas do dashboard</strong>
+        <p>{{ loadError() }}</p>
+      </div>
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        (click)="refreshData()"
+        data-testid="dashboard-retry-btn"
+      >
+        Tentar Novamente
+      </button>
+    </div>
+  }
+
+  <section class="shortcuts-strip" aria-label="Atalhos operacionais rápidos">
+    <div class="shortcuts-actions">
+      <a
+        routerLink="/app/inspections/new"
+        class="btn btn-primary"
+        data-testid="shortcut-new-inspection"
+      >
+        + Nova Inspeção
+      </a>
+
+      <button
+        type="button"
+        class="btn btn-secondary"
+        (click)="openAwaitingReview()"
+        data-testid="shortcut-review-pending"
+      >
+        <span>Revisar Pendentes</span>
+        <span class="shortcut-count">{{ metrics().awaitingReviewCount }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-danger-outline"
+        (click)="openOverdue()"
+        data-testid="shortcut-view-overdue"
+      >
+        <span>Ver Atrasadas</span>
+        <span class="shortcut-count">{{ metrics().overdueCount }}</span>
+      </button>
+    </div>
+
+    @if (!loading() && !loadError() && metrics().overdueCount === 0) {
+      <div class="alert-banner alert-success" style="padding: 0.45rem 0.8rem" data-testid="no-overdue-encouragement">
+        <p><strong>Nenhuma inspeção em atraso no momento!</strong> Equipe dentro do SLA.</p>
+      </div>
+    }
+  </section>
+
+  <section class="metrics-grid" aria-label="Indicadores consolidados de inspeções">
+    <app-metric-card
+      label="Total de Inspeções"
+      [value]="metrics().totalInspections"
+      [subtitle]="metrics().approvedCount + ' aprovadas • ' + metrics().assignedCount + ' atribuídas'"
+      tone="teal"
+      icon="total"
+      [loading]="loading()"
+      testId="metric-card-total"
+      (cardClick)="openAllInspections()"
+    />
+
+    <app-metric-card
+      label="Em Andamento"
+      [value]="metrics().inProgressCount"
+      subtitle="Inspeções atualmente em execução em campo"
+      tone="orange"
+      icon="in-progress"
+      [loading]="loading()"
+      testId="metric-card-in-progress"
+      (cardClick)="openByStatus('EM_ANDAMENTO')"
+    />
+
+    <app-metric-card
+      label="Aguardando Revisão"
+      [value]="metrics().awaitingReviewCount"
+      [badgeText]="metrics().underReviewCount > 0 ? metrics().underReviewCount + ' em análise' : null"
+      [subtitle]="metrics().submittedCount + ' enviadas para conferência técnica'"
+      tone="amber"
+      icon="awaiting-review"
+      [loading]="loading()"
+      testId="metric-card-awaiting-review"
+      (cardClick)="openAwaitingReview()"
+    />
+
+    <app-metric-card
+      label="Atrasadas"
+      [value]="metrics().overdueCount"
+      [badgeText]="metrics().overdueCount > 0 ? 'Ação imediata' : 'Em dia'"
+      [subtitle]="overdueSubtitle()"
+      [tone]="metrics().overdueCount > 0 ? 'red' : 'green'"
+      icon="overdue"
+      [loading]="loading()"
+      testId="metric-card-overdue"
+      (cardClick)="openOverdue()"
+    />
+  </section>
+
+  <section class="dashboard-grid">
+    <app-recent-inspections
+      [inspections]="metrics().recentInspections"
+      [loading]="loading()"
+      (inspectionClick)="openInspectionReview($event)"
+      (statusClick)="openByStatus($event)"
+      (overdueClick)="openOverdue()"
+    />
+
+    <div class="dashboard-side">
+      <app-severity-chart
+        [counts]="metrics().nonConformitiesBySeverity"
+        [loading]="loading()"
+        (severitySelected)="openSeverityInspections($event)"
+      />
+
+      <section class="status-summary-card" data-testid="status-breakdown-card">
+        <h2>Inspeções por Estado</h2>
+        <div class="status-chips-grid">
+          @for (item of operationalStatuses; track item.value) {
+            <button
+              type="button"
+              class="status-chip-btn"
+              (click)="openByStatus(item.value)"
+              [attr.data-testid]="'status-summary-' + item.value"
+            >
+              <span>{{ item.label }}</span>
+              <strong>{{ statusCount(item.value) }}</strong>
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+  </section>
+</section>

@@ -27,6 +27,9 @@ import com.fieldops.modules.master.repository.EquipmentRepository;
 import com.fieldops.modules.master.repository.SiteRepository;
 import com.fieldops.modules.master.repository.UserRepository;
 import com.fieldops.modules.sync.domain.InspectionResponse;
+import com.fieldops.modules.sync.domain.NonConformity;
+import com.fieldops.modules.sync.domain.NonConformitySeverity;
+import com.fieldops.modules.sync.domain.NonConformityStatus;
 import com.fieldops.modules.sync.repository.EvidenceFileRepository;
 import com.fieldops.modules.sync.repository.InspectionResponseRepository;
 import com.fieldops.modules.sync.repository.NonConformityRepository;
@@ -750,6 +753,98 @@ class InspectionReviewIntegrationTest {
         assertTrue(json.contains("/api/v1/inspections/{id}/responses/{itemId}/admin-adjustment"));
         assertTrue(json.contains("ApproveInspectionRequest"));
         assertTrue(json.contains("RejectInspectionRequest"));
+    }
+
+    @Test
+    @DisplayName("TASK-021 RT-01 / CA-03: Endpoint /api/v1/dashboard/metrics consolida contadores, atrasadas, severidades e respeita RBAC")
+    void shouldAggregateDashboardMetricsAndEnforceRbac() throws Exception {
+        // Sem autenticação -> 401; Técnico -> 403
+        mockMvc.perform(get("/api/v1/dashboard/metrics"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/v1/dashboard/metrics")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + technicianToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        // 1. Inspeção enviada (aguardando revisão)
+        InspectionDetailsResponse submitted = createSubmittedInspection();
+
+        // 2. Inspeção atribuída em atraso
+        InspectionDetailsResponse overdueScheduled = inspectionSchedulingService.schedule(
+                new ScheduleInspectionRequest(
+                        publishedTemplate.id(),
+                        null,
+                        null,
+                        client.getId(),
+                        site.getId(),
+                        equipment.getId(),
+                        technicianUser.getId(),
+                        supervisorUser.getId(),
+                        Instant.now().minus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS).toString(),
+                        null,
+                        "Inspeção Atrasada Dashboard",
+                        null,
+                        InspectionPriority.URGENTE
+                ),
+                new AuthenticatedUser(supervisorUser.getId(), supervisorUser.getEmail(), supervisorUser.getRole())
+        );
+
+        // 3. Inspeção em andamento no prazo
+        InspectionDetailsResponse inProgressScheduled = scheduleInspection();
+        Inspection inProgressEntity = inspectionRepository.findById(inProgressScheduled.id()).orElseThrow();
+        inProgressEntity.setStatus(InspectionStatus.EM_ANDAMENTO);
+        inspectionRepository.saveAndFlush(inProgressEntity);
+
+        // 4. Não conformidades ativas + 1 cancelada (que não deve contar)
+        nonConformityRepository.saveAllAndFlush(List.of(
+                createNc(submitted.id(), "Falha crítica", NonConformitySeverity.CRITICA, NonConformityStatus.OPEN),
+                createNc(submitted.id(), "Falha alta", NonConformitySeverity.ALTA, NonConformityStatus.OPEN),
+                createNc(submitted.id(), "Falha média", NonConformitySeverity.MEDIA, NonConformityStatus.RESOLVED),
+                createNc(submitted.id(), "Falha baixa", NonConformitySeverity.BAIXA, NonConformityStatus.OPEN),
+                createNc(submitted.id(), "Falha cancelada", NonConformitySeverity.CRITICA, NonConformityStatus.CANCELED)
+        ));
+
+        mockMvc.perform(get("/api/v1/dashboard/metrics")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + supervisorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalInspections").value(3))
+                .andExpect(jsonPath("$.inProgressCount").value(1))
+                .andExpect(jsonPath("$.awaitingReviewCount").value(1))
+                .andExpect(jsonPath("$.overdueCount").value(1))
+                .andExpect(jsonPath("$.assignedCount").value(1))
+                .andExpect(jsonPath("$.submittedCount").value(1))
+                .andExpect(jsonPath("$.totalNonConformities").value(4))
+                .andExpect(jsonPath("$.nonConformitiesBySeverity.CRITICA").value(1))
+                .andExpect(jsonPath("$.nonConformitiesBySeverity.ALTA").value(1))
+                .andExpect(jsonPath("$.nonConformitiesBySeverity.MEDIA").value(1))
+                .andExpect(jsonPath("$.nonConformitiesBySeverity.BAIXA").value(1))
+                .andExpect(jsonPath("$.recentInspections", hasSize(3)))
+                .andExpect(jsonPath("$.generatedAt").isNotEmpty());
+
+        // Documentação OpenAPI expõe /api/v1/dashboard/metrics
+        MvcResult apiDocs = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertTrue(apiDocs.getResponse().getContentAsString().contains("/api/v1/dashboard/metrics"));
+    }
+
+    private NonConformity createNc(
+            UUID inspectionId,
+            String title,
+            NonConformitySeverity severity,
+            NonConformityStatus status
+    ) {
+        NonConformity nc = new NonConformity();
+        nc.setId(UUID.randomUUID());
+        nc.setInspectionId(inspectionId);
+        nc.setTitle(title);
+        nc.setDescription("Descrição de " + title);
+        nc.setSeverity(severity);
+        nc.setStatus(status);
+        nc.setCreatedBy(technicianUser.getId());
+        nc.setServerReceivedAt(Instant.now());
+        return nc;
     }
 
     private InspectionDetailsResponse scheduleInspection() {
