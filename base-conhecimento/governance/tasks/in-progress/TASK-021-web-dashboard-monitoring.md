@@ -23,6 +23,7 @@ O Dashboard é a visão executiva do FieldOps para o supervisor e o administrado
 - `backend/src/main/java/com/fieldops/modules/inspection/dto/DashboardMetricsResponse.java` (DTO consolidado de métricas do Dashboard)
 - `backend/src/main/java/com/fieldops/modules/inspection/service/DashboardMetricsService.java` (Serviço agregador leve de indicadores)
 - `backend/src/main/java/com/fieldops/modules/inspection/controller/DashboardController.java` (Endpoint `GET /api/v1/dashboard/metrics`)
+- `backend/src/main/java/com/fieldops/config/DevBootstrapSeedConfig.java` (Massa inicial enriquecida com inspeção `EM_ANDAMENTO`, inspeção `ENVIADA` e 4 NCs para validação do Dashboard)
 - `backend/src/test/java/com/fieldops/modules/inspection/InspectionReviewIntegrationTest.java` (Teste de integração do endpoint e RBAC)
 - `web/src/app/pages/dashboard/dashboard.component.ts` / `.html` (Página principal do Dashboard)
 - `web/src/app/pages/dashboard/components/metric-card.component.ts` (Card com número, ícone, gradiente e skeleton loader)

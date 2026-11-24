@@ -1,12 +1,20 @@
 package com.fieldops.config;
 
 import com.fieldops.modules.inspection.domain.Inspection;
+import com.fieldops.modules.inspection.domain.InspectionItemSnapshot;
 import com.fieldops.modules.inspection.domain.InspectionPriority;
 import com.fieldops.modules.inspection.domain.InspectionStatus;
 import com.fieldops.modules.inspection.dto.InspectionDetailsResponse;
+import com.fieldops.modules.inspection.dto.InspectionItemSnapshotResponse;
 import com.fieldops.modules.inspection.dto.ScheduleInspectionRequest;
 import com.fieldops.modules.inspection.repository.InspectionRepository;
 import com.fieldops.modules.inspection.service.InspectionSchedulingService;
+import com.fieldops.modules.sync.domain.InspectionResponse;
+import com.fieldops.modules.sync.domain.NonConformity;
+import com.fieldops.modules.sync.domain.NonConformitySeverity;
+import com.fieldops.modules.sync.domain.NonConformityStatus;
+import com.fieldops.modules.sync.repository.InspectionResponseRepository;
+import com.fieldops.modules.sync.repository.NonConformityRepository;
 import com.fieldops.modules.master.domain.Client;
 import com.fieldops.modules.master.domain.Equipment;
 import com.fieldops.modules.master.domain.EquipmentStatus;
@@ -66,6 +74,8 @@ public class DevBootstrapSeedConfig {
             TemplateService templateService,
             InspectionRepository inspectionRepository,
             InspectionSchedulingService inspectionSchedulingService,
+            InspectionResponseRepository inspectionResponseRepository,
+            NonConformityRepository nonConformityRepository,
             TransactionTemplate transactionTemplate,
             PasswordEncoder passwordEncoder
     ) {
@@ -83,7 +93,9 @@ public class DevBootstrapSeedConfig {
                     equipmentRepository,
                     templateRepository,
                     inspectionRepository,
-                    inspectionSchedulingService
+                    inspectionSchedulingService,
+                    inspectionResponseRepository,
+                    nonConformityRepository
             ));
         };
     }
@@ -467,7 +479,9 @@ public class DevBootstrapSeedConfig {
             EquipmentRepository equipmentRepository,
             InspectionTemplateRepository templateRepository,
             InspectionRepository inspectionRepository,
-            InspectionSchedulingService inspectionSchedulingService
+            InspectionSchedulingService inspectionSchedulingService,
+            InspectionResponseRepository inspectionResponseRepository,
+            NonConformityRepository nonConformityRepository
     ) {
         if (inspectionRepository.count() > 0) {
             return;
@@ -562,10 +576,199 @@ public class DevBootstrapSeedConfig {
             approvedEntity.setCompletedAtDevice(now.minus(3, ChronoUnit.HOURS));
             approvedEntity.setSubmittedAtServer(now.minus(2, ChronoUnit.HOURS));
             approvedEntity.setApprovedAt(now.minus(1, ChronoUnit.HOURS));
+            approvedEntity.setApprovedBy(supervisor.getId());
             inspectionRepository.save(approvedEntity);
         }
 
-        log.info("Massa inicial de inspeções (1 atribuída no prazo, 1 atribuída em atraso e 1 aprovada) populada para validação.");
+        InspectionDetailsResponse inProgressCreated = inspectionSchedulingService.schedule(
+                new ScheduleInspectionRequest(
+                        publishedTemplate.getId(),
+                        null,
+                        null,
+                        compressor.getSite().getClient().getId(),
+                        compressor.getSite().getId(),
+                        compressor.getId(),
+                        ana.getId(),
+                        supervisor.getId(),
+                        now.plus(4, ChronoUnit.HOURS).toString(),
+                        null,
+                        "Inspeção em Execução — Compressor Parafuso CP-002",
+                        "Execução iniciada em campo para validação de pressão e ruído.",
+                        InspectionPriority.MEDIA
+                ),
+                actor
+        );
+        Inspection inProgressEntity = inspectionRepository.findDetailedById(inProgressCreated.id()).orElse(null);
+        if (inProgressEntity != null) {
+            inProgressEntity.setStatus(InspectionStatus.EM_ANDAMENTO);
+            inProgressEntity.setStartedAtDevice(now.minus(45, ChronoUnit.MINUTES));
+            inProgressEntity.setStartedAtServer(now.minus(40, ChronoUnit.MINUTES));
+            inProgressEntity.setStartLatitude(new BigDecimal("-23.5015300"));
+            inProgressEntity.setStartLongitude(new BigDecimal("-47.4525600"));
+            inProgressEntity.setStartAccuracy(new BigDecimal("8.50"));
+            inspectionRepository.save(inProgressEntity);
+        }
+
+        InspectionDetailsResponse submittedCreated = inspectionSchedulingService.schedule(
+                new ScheduleInspectionRequest(
+                        publishedTemplate.getId(),
+                        null,
+                        null,
+                        generator.getSite().getClient().getId(),
+                        generator.getSite().getId(),
+                        generator.getId(),
+                        carlos.getId(),
+                        supervisor.getId(),
+                        now.minus(3, ChronoUnit.HOURS).toString(),
+                        null,
+                        "Inspeção Aguardando Revisão — Gerador Diesel GD-001",
+                        "Sincronizada pelo aplicativo móvel com não conformidades para parecer técnico.",
+                        InspectionPriority.ALTA
+                ),
+                actor
+        );
+        Inspection submittedEntity = inspectionRepository.findDetailedById(submittedCreated.id()).orElse(null);
+        if (submittedEntity != null) {
+            submittedEntity.setStatus(InspectionStatus.ENVIADA);
+            submittedEntity.setStartedAtDevice(now.minus(2, ChronoUnit.HOURS));
+            submittedEntity.setStartedAtServer(now.minus(110, ChronoUnit.MINUTES));
+            submittedEntity.setCompletedAtDevice(now.minus(30, ChronoUnit.MINUTES));
+            submittedEntity.setSubmittedAtServer(now.minus(25, ChronoUnit.MINUTES));
+            submittedEntity.setStartLatitude(new BigDecimal("-23.5015300"));
+            submittedEntity.setStartLongitude(new BigDecimal("-47.4525600"));
+            submittedEntity.setStartAccuracy(new BigDecimal("7.20"));
+            submittedEntity.setCompleteLatitude(new BigDecimal("-23.5018800"));
+            submittedEntity.setCompleteLongitude(new BigDecimal("-47.4522100"));
+            submittedEntity.setCompleteAccuracy(new BigDecimal("6.40"));
+            inspectionRepository.save(submittedEntity);
+
+            seedResponsesAndNonConformities(
+                    submittedEntity,
+                    submittedCreated.items(),
+                    carlos.getId(),
+                    now,
+                    inspectionResponseRepository,
+                    nonConformityRepository
+            );
+        }
+
+        log.info("Massa inicial de inspeções populada para Dashboard e Revisão (ATRIBUÍDA, EM_ANDAMENTO, ENVIADA, APROVADA e 4 NCs).");
+    }
+
+    private void seedResponsesAndNonConformities(
+            Inspection inspection,
+            List<InspectionItemSnapshotResponse> items,
+            UUID technicianId,
+            Instant now,
+            InspectionResponseRepository inspectionResponseRepository,
+            NonConformityRepository nonConformityRepository
+    ) {
+        UUID firstItemId = null;
+        String firstItemTitle = null;
+
+        for (InspectionItemSnapshotResponse item : items) {
+            InspectionResponse response = new InspectionResponse();
+            response.setId(UUID.randomUUID());
+            response.setInspectionId(inspection.getId());
+            response.setInspectionItemId(item.id());
+            response.setAnsweredBy(technicianId);
+            response.setAnsweredAtDevice(now.minus(40, ChronoUnit.MINUTES));
+            response.setServerReceivedAt(now.minus(25, ChronoUnit.MINUTES));
+
+            switch (item.responseType()) {
+                case CONFORMITY -> {
+                    firstItemId = item.id();
+                    firstItemTitle = item.itemTitle();
+                    response.setValueRaw("NON_CONFORMING");
+                    response.setConformity("NON_CONFORMING");
+                    response.setNonConformity(true);
+                    response.setNonConformityDescription("Lacre rompido na porta lateral do gerador.");
+                    response.setObservation("Detectado durante vistoria visual inicial.");
+                }
+                case BOOLEAN -> {
+                    response.setValueRaw("true");
+                    response.setValueBoolean(true);
+                    response.setObservation("Piso limpo e sem vestígios de vazamento.");
+                }
+                case SINGLE_CHOICE -> {
+                    response.setValueRaw("Automático");
+                    response.setValueText("Automático");
+                }
+                case NUMBER -> {
+                    response.setValueRaw("1425.5");
+                    response.setValueNumber(new BigDecimal("1425.5"));
+                }
+                case DATE -> {
+                    response.setValueRaw("2026-10-15");
+                    response.setValueDate(LocalDate.of(2026, 10, 15));
+                }
+                case TEXT_SHORT -> {
+                    response.setValueRaw("Marcos Silva");
+                    response.setValueText("Marcos Silva");
+                }
+                case TEXT_LONG -> {
+                    response.setValueRaw("Equipamento operando em regime de stand-by; necessária reposição do lacre.");
+                    response.setValueText("Equipamento operando em regime de stand-by; necessária reposição do lacre.");
+                }
+                case PHOTO -> {
+                    response.setValueRaw("FOTO_ANEXADA");
+                    response.setObservation("Registro fotográfico realizado em campo.");
+                }
+            }
+            inspectionResponseRepository.save(response);
+        }
+
+        nonConformityRepository.saveAll(List.of(
+                createSeedNonConformity(
+                        inspection.getId(), firstItemId, firstItemTitle,
+                        "Falha no sensor de parada de emergência",
+                        "Botão de emergência apresentou travamento mecânico no teste.",
+                        NonConformitySeverity.CRITICA, technicianId, now
+                ),
+                createSeedNonConformity(
+                        inspection.getId(), firstItemId, firstItemTitle,
+                        "Lacre lateral rompido na carenagem",
+                        "Carenagem direita sem lacre de segurança intacto.",
+                        NonConformitySeverity.ALTA, technicianId, now
+                ),
+                createSeedNonConformity(
+                        inspection.getId(), null, null,
+                        "Filtro de ar próximo ao limite de horas",
+                        "Recomendar substituição preventiva na próxima parada programada.",
+                        NonConformitySeverity.MEDIA, technicianId, now
+                ),
+                createSeedNonConformity(
+                        inspection.getId(), null, null,
+                        "Etiqueta de identificação parcialmente desgastada",
+                        "Leitura ainda possível, porém recomenda-se reimpressão da etiqueta.",
+                        NonConformitySeverity.BAIXA, technicianId, now
+                )
+        ));
+    }
+
+    private NonConformity createSeedNonConformity(
+            UUID inspectionId,
+            UUID itemId,
+            String itemTitle,
+            String title,
+            String description,
+            NonConformitySeverity severity,
+            UUID createdBy,
+            Instant now
+    ) {
+        NonConformity nc = new NonConformity();
+        nc.setId(UUID.randomUUID());
+        nc.setInspectionId(inspectionId);
+        nc.setInspectionItemId(itemId);
+        nc.setItemTitle(itemTitle);
+        nc.setTitle(title);
+        nc.setDescription(description);
+        nc.setSeverity(severity);
+        nc.setStatus(NonConformityStatus.OPEN);
+        nc.setCreatedBy(createdBy);
+        nc.setCreatedAtDevice(now.minus(35, ChronoUnit.MINUTES));
+        nc.setServerReceivedAt(now.minus(25, ChronoUnit.MINUTES));
+        return nc;
     }
 }
 
