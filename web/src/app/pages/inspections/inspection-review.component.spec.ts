@@ -5,6 +5,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { BehaviorSubject, of, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { NotificationService } from '../../core/services/notification.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 import { ChecklistReviewTreeComponent } from './components/checklist-review-tree.component';
 import { EvidenceLightboxComponent } from './components/evidence-lightbox.component';
 import { LocationMapComponent } from './components/location-map.component';
@@ -590,7 +591,8 @@ describe('Inspection Review Module (TASK-020)', () => {
       modalFixture.detectChanges();
       expect(submitBtn.disabled).toBeFalse();
 
-      modalComp.confirm();
+      submitBtn.click();
+      expect(confirmedSpy).toHaveBeenCalledTimes(1);
       expect(confirmedSpy).toHaveBeenCalledWith({
         rejection_reason: 'Foto do painel ilegível; repetir captura.',
         comments: 'Conferir foco da lente.',
@@ -613,7 +615,8 @@ describe('Inspection Review Module (TASK-020)', () => {
       expect(confirmBtn.disabled).toBeFalse();
 
       modalComp.commentsControl.setValue('  Validado em conformidade.  ');
-      modalComp.confirm();
+      confirmBtn.click();
+      expect(confirmedSpy).toHaveBeenCalledTimes(1);
       expect(confirmedSpy).toHaveBeenCalledWith({ comments: 'Validado em conformidade.' });
 
       modalComp.inspection = makeReviewInspection({ status: 'APROVADA' });
@@ -629,6 +632,7 @@ describe('Inspection Review Module (TASK-020)', () => {
     let fixture: ComponentFixture<InspectionReviewComponent>;
     let component: InspectionReviewComponent;
     let inspectionServiceMock: jasmine.SpyObj<InspectionService>;
+    let dashboardServiceMock: jasmine.SpyObj<DashboardService>;
     let notificationsMock: jasmine.SpyObj<NotificationService>;
     let paramMap$: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
 
@@ -642,6 +646,9 @@ describe('Inspection Review Module (TASK-020)', () => {
         'reject',
         'getAuditLogs',
         'getEvidenceBlob',
+      ]);
+      dashboardServiceMock = jasmine.createSpyObj<DashboardService>('DashboardService', [
+        'invalidateCache',
       ]);
       notificationsMock = jasmine.createSpyObj<NotificationService>('NotificationService', [
         'showSuccess',
@@ -662,6 +669,7 @@ describe('Inspection Review Module (TASK-020)', () => {
             useValue: { paramMap: paramMap$.asObservable() },
           },
           { provide: InspectionService, useValue: inspectionServiceMock },
+          { provide: DashboardService, useValue: dashboardServiceMock },
           { provide: NotificationService, useValue: notificationsMock },
         ],
       }).compileComponents();

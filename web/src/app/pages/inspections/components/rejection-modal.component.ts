@@ -8,7 +8,7 @@ import {
   Output,
   SimpleChanges,
 } from '@angular/core';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   InspectionDetailsResponse,
   canSubmitInspectionVerdict,
@@ -29,7 +29,7 @@ export interface ApprovalModalPayload {
 @Component({
   selector: 'app-rejection-modal',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   template: `
     @if (open && inspection) {
       <div class="modal-backdrop" role="presentation" (click)="close()">
@@ -147,9 +147,10 @@ export interface ApprovalModalPayload {
                 Cancelar
               </button>
               <button
-                type="submit"
+                type="button"
                 class="btn btn-danger"
                 [disabled]="loading || !canRejectCurrent() || !isValidReason()"
+                (click)="confirm()"
                 data-testid="confirm-reject-inspection-btn"
               >
                 @if (loading) {
@@ -264,7 +265,7 @@ export class RejectionModalComponent implements OnChanges {
 @Component({
   selector: 'app-approval-modal',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   template: `
     @if (open && inspection) {
       <div class="modal-backdrop" role="presentation" (click)="close()">
@@ -370,9 +371,10 @@ export class RejectionModalComponent implements OnChanges {
                 Voltar
               </button>
               <button
-                type="submit"
+                type="button"
                 class="btn btn-primary"
                 [disabled]="loading || !canApproveCurrent() || commentsControl.invalid"
+                (click)="confirm()"
                 data-testid="confirm-approve-inspection-btn"
               >
                 @if (loading) {

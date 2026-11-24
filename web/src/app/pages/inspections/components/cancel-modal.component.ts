@@ -8,7 +8,7 @@ import {
   Output,
   SimpleChanges,
 } from '@angular/core';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { InspectionDetailsResponse, canCancelInspection } from '../inspection.service';
 
 /**
@@ -17,7 +17,7 @@ import { InspectionDetailsResponse, canCancelInspection } from '../inspection.se
 @Component({
   selector: 'app-cancel-modal',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   template: `
     @if (open && inspection) {
       <div class="modal-backdrop" role="presentation" (click)="close()">
@@ -120,9 +120,10 @@ import { InspectionDetailsResponse, canCancelInspection } from '../inspection.se
                 Voltar
               </button>
               <button
-                type="submit"
+                type="button"
                 class="btn btn-danger"
                 [disabled]="loading || !canCancelCurrent() || !isValidReason()"
+                (click)="confirm()"
                 data-testid="confirm-cancel-inspection-btn"
               >
                 @if (loading) {

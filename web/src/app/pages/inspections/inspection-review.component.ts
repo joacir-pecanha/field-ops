@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { NotificationService } from '../../core/services/notification.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 import {
   ChecklistEvidenceSelection,
   ChecklistReviewTreeComponent,
@@ -231,6 +232,7 @@ export class InspectionReviewComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
   private readonly inspectionService = inject(InspectionService);
+  private readonly dashboardService = inject(DashboardService, { optional: true });
   private readonly notifications = inject(NotificationService);
 
   private readonly objectUrls: string[] = [];
@@ -375,6 +377,7 @@ export class InspectionReviewComponent implements OnInit {
       .subscribe({
         next: (updated) => {
           this.inspection.set(updated);
+          this.dashboardService?.invalidateCache();
           this.notifications.showSuccess('Revisão técnica iniciada (EM_REVISÃO).');
           this.refreshAuditLogs();
         },
@@ -420,6 +423,7 @@ export class InspectionReviewComponent implements OnInit {
         next: (updated) => {
           this.inspection.set(updated);
           this.approveModalOpen.set(false);
+          this.dashboardService?.invalidateCache();
           this.notifications.showSuccess(
             `Inspeção "${updated.title}" aprovada e bloqueada para edições comuns.`
           );
@@ -475,6 +479,7 @@ export class InspectionReviewComponent implements OnInit {
         next: (updated) => {
           this.inspection.set(updated);
           this.rejectModalOpen.set(false);
+          this.dashboardService?.invalidateCache();
           this.notifications.showSuccess(
             `Inspeção "${updated.title}" reprovada e devolvida ao técnico.`
           );

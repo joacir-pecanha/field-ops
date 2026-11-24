@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -646,6 +648,8 @@ describe('Inspections Module (TASK-012 Passo 5)', () => {
         imports: [InspectionListComponent],
         providers: [
           provideRouter([]),
+          provideHttpClient(),
+          provideHttpClientTesting(),
           { provide: InspectionService, useValue: inspectionServiceMock },
           { provide: ClientsApiService, useValue: clientsApiMock },
           { provide: UsersApiService, useValue: usersApiMock },
@@ -718,6 +722,8 @@ describe('Inspections Module (TASK-012 Passo 5)', () => {
         imports: [InspectionListComponent],
         providers: [
           provideRouter([]),
+          provideHttpClient(),
+          provideHttpClientTesting(),
           { provide: InspectionService, useValue: inspectionServiceMock },
           { provide: ClientsApiService, useValue: clientsApiMock },
           { provide: UsersApiService, useValue: usersApiMock },
