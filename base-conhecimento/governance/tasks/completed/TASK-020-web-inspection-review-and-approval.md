@@ -8,7 +8,7 @@
 - **Agente Executor:** Coder Agent
 - **Especificação de Referência:** [docs/inferface-web.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/inferface-web.md), [docs/criterios-de-avaliacao.md](file:///c:/Users/Joacir/Desktop/field-ops/docs/criterios-de-avaliacao.md)
 - **Data de Criação:** 2026-10-22
-- **Data de Conclusão:** Pendente
+- **Data de Conclusão:** 2026-11-24
 
 ---
 
@@ -68,7 +68,7 @@ A tela de revisão é onde o supervisor técnico avalia minuciosamente o resulta
 - [x] **CA-02:** Clicar em uma foto abre o modal com a imagem em alta resolução.
 - [x] **CA-03:** Aprovar inspeção atualiza a visualização com badge `APROVADA` e desabilita novas ações.
 - [x] **CA-04:** Reprovar sem preencher o motivo é bloqueado; preencher o motivo envia a solicitação e exibe toast de sucesso.
-- [ ] **CA-05:** Aprovação de Joacir Peçanha.
+- [x] **CA-05:** Aprovação de Joacir Peçanha.
 
 ---
 
