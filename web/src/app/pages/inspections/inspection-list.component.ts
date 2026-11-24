@@ -13,6 +13,7 @@ import {
 } from '../../core/master/master-data.models';
 import { UsersApiService } from '../../core/master/users-api.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import { sortIndicatorFor, toggleSortExpression } from '../../shared/utils/form-error.utils';
 import { getResponseTypeLabel } from '../templates/template.service';
@@ -221,6 +222,7 @@ export class InspectionListComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly inspectionService = inject(InspectionService);
+  private readonly dashboardService = inject(DashboardService, { optional: true });
   private readonly clientsApi = inject(ClientsApiService);
   private readonly usersApi = inject(UsersApiService);
   private readonly notifications = inject(NotificationService);
@@ -445,6 +447,7 @@ export class InspectionListComponent implements OnInit {
       .subscribe({
         next: (updated) => {
           this.cancelTarget.set(null);
+          this.dashboardService?.invalidateCache();
           this.notifications.showSuccess(
             `Inspeção "${updated.title}" cancelada com registro de auditoria.`
           );
