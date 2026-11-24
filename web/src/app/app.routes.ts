@@ -4,7 +4,6 @@ import { WEB_ALLOWED_ROLES } from './core/auth/auth.models';
 import { AdminLayoutComponent } from './layout/admin-layout.component';
 import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { LoginComponent } from './pages/login/login.component';
-import { ModulePlaceholderComponent } from './pages/module-placeholder/module-placeholder.component';
 import { pendingChangesGuard } from './pages/templates/template-builder.component';
 
 export const routes: Routes = [
@@ -165,13 +164,8 @@ export const routes: Routes = [
       },
       {
         path: 'non-conformities',
-        component: ModulePlaceholderComponent,
-        data: {
-          roles: ['ADMIN', 'SUPERVISOR'],
-          title: 'Não Conformidades',
-          description: 'Monitoramento de não conformidades por criticidade (TASK-020).',
-        },
-        title: 'Não Conformidades — FieldOps Admin',
+        redirectTo: 'inspections',
+        pathMatch: 'full',
       },
     ],
   },
