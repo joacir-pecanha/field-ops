@@ -10,7 +10,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://SEU-IP-ELASTICO-COM-HIFEN.sslip.io"
+        "EXPO_PUBLIC_API_URL": "https://3-224-77-58.sslip.io"
       }
     },
     "production": {
@@ -18,7 +18,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://SEU-IP-ELASTICO-COM-HIFEN.sslip.io"
+        "EXPO_PUBLIC_API_URL": "https://3-224-77-58.sslip.io"
       }
     }
   }

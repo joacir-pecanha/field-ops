@@ -1,0 +1,317 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "FieldOps Option 1A production stack - EC2 Ubuntu 24.04 with Caddy HTTPS, Spring Boot API, Angular Web, and Amazon RDS PostgreSQL 16"
+
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0872947ff40bc45df
+    Description: "Target VPC ID for FieldOps EC2 and RDS resources"
+  PrimarySubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-062063cbc8baa0843
+    Description: "Primary public subnet ID (us-east-1a) for EC2 and RDS"
+  SecondarySubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-016349a265b4fbf44
+    Description: "Secondary subnet ID (us-east-1b) for RDS DBSubnetGroup multi-AZ requirement"
+  UbuntuAmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0a951420c495183dc
+    Description: "Ubuntu 24.04 LTS amd64 gp3 AMI ID"
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
+    Description: "Existing EC2 KeyPair name for emergency SSH fallback"
+  InstanceProfileName:
+    Type: String
+    Default: LabInstanceProfile
+    Description: "Pre-existing IAM Instance Profile name (AWS Academy Learner Lab)"
+
+Resources:
+  DeployArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Private staging bucket to transfer backend JAR and Angular dist bundle to EC2 via SSM without opening SSH port 22."
+        must: "Must block all public access, enforce SSE-S3 encryption, and enable versioning."
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: FieldOps
+
+  DeployArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Enforce TLS-only transport for all S3 artifact operations."
+        must: "Must deny any s3:* action when aws:SecureTransport is false."
+    Properties:
+      Bucket: !Ref DeployArtifactsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt DeployArtifactsBucket.Arn
+              - !Sub "${DeployArtifactsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  DbCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Store auto-generated PostgreSQL master credentials securely outside templates and logs."
+        must: "Must exclude punctuation so the password is safe in JDBC URLs and env files."
+    Properties:
+      Description: "Master credentials for FieldOps RDS PostgreSQL 16 database"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"postgres"}'
+        GenerateStringKey: password
+        PasswordLength: 24
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: FieldOps
+
+  JwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Store HMAC-SHA256 JWT signing key securely in AWS Secrets Manager."
+        must: "Must be at least 32 bytes (generated as 64 alphanumeric chars)."
+    Properties:
+      Description: "HMAC-SHA256 signing key for FieldOps API JWT tokens"
+      GenerateSecretString:
+        SecretStringTemplate: "{}"
+        GenerateStringKey: jwt_secret
+        PasswordLength: 64
+        ExcludePunctuation: true
+      Tags:
+        - Key: Project
+          Value: FieldOps
+
+  WebApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Allow public HTTP (Let's Encrypt ACME) and HTTPS traffic to Caddy reverse proxy on EC2."
+        must: "Must only expose ports 80 and 443; management uses AWS SSM without inbound SSH."
+    Properties:
+      GroupDescription: "Allow public HTTP and HTTPS traffic to FieldOps Caddy reverse proxy"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: "HTTP for ACME challenge and HTTPS redirect"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: "HTTPS traffic to Caddy"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-web-api-sg"
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Restrict PostgreSQL port 5432 access strictly to the FieldOps EC2 security group."
+        must: "Must never expose PostgreSQL to 0.0.0.0/0."
+    Properties:
+      GroupDescription: "Allow PostgreSQL access only from FieldOps EC2 security group"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref WebApiSecurityGroup
+          Description: "PostgreSQL from FieldOps EC2"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-rds-sg"
+
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Provide two-AZ subnet group required by Amazon RDS."
+        must: "Must include subnets across two distinct availability zones in the target VPC."
+    Properties:
+      DBSubnetGroupDescription: "Subnets for FieldOps RDS PostgreSQL instance"
+      SubnetIds:
+        - !Ref PrimarySubnetId
+        - !Ref SecondarySubnetId
+      Tags:
+        - Key: Project
+          Value: FieldOps
+
+  FieldOpsDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    DependsOn: DbCredentialsSecret
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Managed PostgreSQL 16 database for FieldOps production persistence."
+        must: "Must remain private (PubliclyAccessible false), encrypted at rest, and retain data on delete."
+    Properties:
+      Engine: postgres
+      EngineVersion: "16.15"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: "20"
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: fieldops
+      MasterUsername: postgres
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DbCredentialsSecret}:SecretString:password}}"
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+      BackupRetentionPeriod: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-postgres"
+
+  FieldOpsLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Enforce IMDSv2 and encrypted gp3 root volume on the FieldOps EC2 server."
+        must: "Must set HttpTokens required and encrypt root EBS volume."
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
+          HttpPutResponseHopLimit: 1
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              DeleteOnTermination: true
+
+  FieldOpsServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Single EC2 host running Caddy HTTPS reverse proxy, Angular SPA static files, and Spring Boot backend."
+        must: "Must reuse LabInstanceProfile and bootstrap Java 23, Caddy, and python3-boto3."
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref FieldOpsLaunchTemplate
+        Version: !GetAtt FieldOpsLaunchTemplate.LatestVersionNumber
+      ImageId: !Ref UbuntuAmiId
+      InstanceType: t3.small
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PrimarySubnetId
+      SecurityGroupIds:
+        - !Ref WebApiSecurityGroup
+      IamInstanceProfile: !Ref InstanceProfileName
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-server"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euo pipefail
+          exec > >(tee -a /var/log/fieldops-bootstrap.log) 2>&1
+          export DEBIAN_FRONTEND=noninteractive
+
+          apt-get update
+          apt-get install -y curl gnupg wget apt-transport-https debian-keyring debian-archive-keyring python3-boto3 tar ca-certificates
+
+          # Install Eclipse Temurin JDK 23
+          wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/trusted.gpg.d/adoptium.gpg
+          CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          echo "deb https://packages.adoptium.net/artifactory/deb ${CODENAME} main" > /etc/apt/sources.list.d/adoptium.list
+
+          # Install Caddy stable
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
+
+          apt-get update
+          apt-get install -y temurin-23-jdk caddy
+
+          mkdir -p /opt/fieldops /var/www/fieldops /var/lib/fieldops/evidences
+          chown -R ubuntu:ubuntu /opt/fieldops /var/www/fieldops /var/lib/fieldops
+
+          snap start amazon-ssm-agent || true
+          touch /opt/fieldops/.bootstrap-complete
+
+  FieldOpsEip:
+    Type: AWS::EC2::EIP
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Fixed public IP so Learner Lab stop/start cycles do not break the mobile APK URL or sslip.io certificate."
+        must: "Must use VPC domain and remain associated with FieldOpsServer."
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-eip"
+
+  FieldOpsEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: "Attach the static Elastic IP to FieldOpsServer."
+        must: "Must bind FieldOpsEip AllocationId to FieldOpsServer."
+    Properties:
+      AllocationId: !GetAtt FieldOpsEip.AllocationId
+      InstanceId: !Ref FieldOpsServer
+
+Outputs:
+  PublicIp:
+    Description: "Static Elastic IP attached to FieldOpsServer"
+    Value: !Ref FieldOpsEip
+  SslipDomain:
+    Description: "sslip.io domain for automatic HTTPS certificate"
+    Value: !Sub
+      - "${DashedIp}.sslip.io"
+      - DashedIp: !Join ["-", !Split [".", !Ref FieldOpsEip]]
+  PublicHttpsUrl:
+    Description: "Public HTTPS base URL for FieldOps Web and API"
+    Value: !Sub
+      - "https://${DashedIp}.sslip.io"
+      - DashedIp: !Join ["-", !Split [".", !Ref FieldOpsEip]]
+  InstanceId:
+    Description: "EC2 Instance ID of FieldOpsServer"
+    Value: !Ref FieldOpsServer
+  RdsEndpoint:
+    Description: "RDS PostgreSQL endpoint address"
+    Value: !GetAtt FieldOpsDatabase.Endpoint.Address
+  DeployBucketName:
+    Description: "Private S3 bucket name for deployment artifacts"
+    Value: !Ref DeployArtifactsBucket
+  DbSecretArn:
+    Description: "Secrets Manager ARN for RDS credentials"
+    Value: !Ref DbCredentialsSecret
+  JwtSecretArn:
+    Description: "Secrets Manager ARN for JWT signing key"
+    Value: !Ref JwtSecret

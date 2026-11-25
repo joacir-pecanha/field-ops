@@ -1,4 +1,4 @@
-# Stage 1: Build executable Spring Boot JAR with JDK 23
+ # Stage 1: Build executable Spring Boot JAR with JDK 23
 FROM eclipse-temurin:23-jdk-alpine AS build
 WORKDIR /app
 

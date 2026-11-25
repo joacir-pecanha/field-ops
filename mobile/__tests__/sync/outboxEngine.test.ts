@@ -14,6 +14,10 @@ import {
   type SyncApiClient,
   type SyncBatchRequest,
 } from '../../src/infrastructure/sync/outboxEngine';
+import {
+  buildEvidenceUploadFormData,
+  createNativeMultipartFilePart,
+} from '../../src/infrastructure/sync/evidenceMultipart';
 import type { SyncBatchResponse } from '../../src/infrastructure/database/types';
 
 /**
@@ -795,5 +799,59 @@ describe('Motor de Sincronização Outbox (SPEC-002 / TASK-002)', () => {
     assert.equal(updatedEv1?.remote_key, 'remote-insp-media-1/ev-item-1.jpg');
     assert.equal(updatedEv2?.status, 'UPLOADED');
     assert.equal(updatedEv2?.remote_key, 'remote-insp-media-1/ev-nc-1.jpg');
+  });
+
+  test('createNativeMultipartFilePart gera parte compatível com expo/fetch (bytes, name e type)', async () => {
+    const sampleBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    const nativeUri = 'file:///data/user/0/com.fieldops.mobile/files/evidences/ev-native.jpg';
+
+    const part = await createNativeMultipartFilePart(
+      nativeUri,
+      'ev-native.jpg',
+      'image/jpeg',
+      async (uri) => {
+        assert.equal(uri, nativeUri);
+        return sampleBytes;
+      }
+    );
+
+    assert.equal(part.uri, nativeUri);
+    assert.equal(part.name, 'ev-native.jpg');
+    assert.equal(part.type, 'image/jpeg');
+    assert.equal(part.size, sampleBytes.byteLength);
+    assert.deepEqual(await part.bytes(), sampleBytes);
+    assert.equal((await part.arrayBuffer()).byteLength, sampleBytes.byteLength);
+  });
+
+  test('buildEvidenceUploadFormData aceita URI file:// nativa usando bytes em vez de descritor legado sem bytes()', async () => {
+    const sampleBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    const nativeUri = 'file:///data/user/0/com.fieldops.mobile/files/evidences/ev-native-2.jpg';
+
+    const formData = await buildEvidenceUploadFormData(
+      {
+        operationId: 'op-native-1',
+        evidenceId: 'ev-native-2',
+        inspectionId: 'insp-native-1',
+        itemId: 'item-native-1',
+        fileName: 'ev-native-2.jpg',
+        mimeType: 'image/jpeg',
+        localUri: nativeUri,
+      },
+      {
+        readNativeBytes: async (uri) => {
+          assert.equal(uri, nativeUri);
+          return sampleBytes;
+        },
+      }
+    );
+
+    const fileEntry = formData.get('file');
+    assert.ok(fileEntry instanceof Blob);
+    assert.equal(fileEntry.type, 'image/jpeg');
+    assert.equal(fileEntry.size, sampleBytes.byteLength);
+    assert.equal(formData.get('inspectionId'), 'insp-native-1');
+    assert.equal(formData.get('evidenceId'), 'ev-native-2');
+    assert.equal(formData.get('operationId'), 'op-native-1');
+    assert.equal(formData.get('itemId'), 'item-native-1');
   });
 });

@@ -23,7 +23,51 @@ export interface UploadEvidenceResponse {
   alreadyProcessed?: boolean;
 }
 
+export interface NativeMultipartFilePart {
+  uri: string;
+  name: string;
+  type: string;
+  size: number;
+  bytes: () => Promise<Uint8Array<ArrayBuffer>>;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+}
+
 const WEB_EVIDENCE_STORAGE_KEY = 'fieldops:web_evidence_files:v1';
+
+function ensureArrayBufferBytes(input: Uint8Array): Uint8Array<ArrayBuffer> {
+  if (input.buffer instanceof ArrayBuffer) {
+    return input as Uint8Array<ArrayBuffer>;
+  }
+  const buffer = new ArrayBuffer(input.byteLength);
+  const copy = new Uint8Array(buffer);
+  copy.set(input);
+  return copy;
+}
+
+/**
+ * Decodifica uma string base64 para bytes binários compatíveis com Blob/FormData.
+ */
+export function decodeBase64ToBytes(base64Payload: string): Uint8Array<ArrayBuffer> {
+  if (typeof globalThis.atob === 'function') {
+    const binary = globalThis.atob(base64Payload);
+    const buffer = new ArrayBuffer(binary.length);
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  if (typeof Buffer !== 'undefined') {
+    const decoded = Buffer.from(base64Payload, 'base64');
+    const buffer = new ArrayBuffer(decoded.byteLength);
+    const bytes = new Uint8Array(buffer);
+    bytes.set(decoded);
+    return bytes;
+  }
+
+  throw new Error('Decodificador base64 indisponível neste ambiente.');
+}
 
 /**
  * Resolve uma URI `fieldops-web://` armazenada no localStorage do Expo Web para sua Data URL base64.
@@ -74,27 +118,11 @@ export function decodeDataUrlToBlob(
 
   let bytes: Uint8Array<ArrayBuffer>;
   if (isBase64) {
-    if (typeof globalThis.atob === 'function') {
-      const binary = globalThis.atob(payload);
-      const buffer = new ArrayBuffer(binary.length);
-      bytes = new Uint8Array(buffer);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-    } else if (typeof Buffer !== 'undefined') {
-      const decoded = Buffer.from(payload, 'base64');
-      const buffer = new ArrayBuffer(decoded.byteLength);
-      bytes = new Uint8Array(buffer);
-      bytes.set(decoded);
-    } else {
-      throw new Error('Decodificador base64 indisponível neste ambiente.');
-    }
+    bytes = decodeBase64ToBytes(payload);
   } else {
     const decodedText = decodeURIComponent(payload);
     const encoded = new TextEncoder().encode(decodedText);
-    const buffer = new ArrayBuffer(encoded.byteLength);
-    bytes = new Uint8Array(buffer);
-    bytes.set(encoded);
+    bytes = ensureArrayBufferBytes(encoded);
   }
 
   return {
@@ -104,10 +132,77 @@ export function decodeDataUrlToBlob(
 }
 
 /**
+ * Lê os bytes de uma evidência armazenada localmente em Android/iOS via `expo-file-system`.
+ * Importação dinâmica mantém compatibilidade com execução de testes em Node.js.
+ */
+export async function readNativeEvidenceBytes(uri: string): Promise<Uint8Array<ArrayBuffer>> {
+  let modernError: unknown = null;
+
+  try {
+    const fsModule = await import('expo-file-system');
+    if (typeof fsModule.File === 'function') {
+      const nativeFile = new fsModule.File(uri);
+      if (typeof nativeFile.bytes === 'function') {
+        const rawBytes = await nativeFile.bytes();
+        return ensureArrayBufferBytes(rawBytes);
+      }
+    }
+  } catch (err) {
+    modernError = err;
+  }
+
+  try {
+    const legacyFs = await import('expo-file-system/legacy');
+    if (typeof legacyFs.readAsStringAsync === 'function') {
+      const base64 = await legacyFs.readAsStringAsync(uri, { encoding: 'base64' });
+      return decodeBase64ToBytes(base64);
+    }
+  } catch (legacyErr) {
+    const cause =
+      legacyErr instanceof Error
+        ? legacyErr.message
+        : modernError instanceof Error
+          ? modernError.message
+          : String(legacyErr ?? modernError ?? 'erro desconhecido');
+    throw new Error(`Falha ao ler arquivo local da evidência (${uri}): ${cause}`);
+  }
+
+  const fallbackMsg =
+    modernError instanceof Error ? modernError.message : 'módulo expo-file-system indisponível';
+  throw new Error(`Falha ao ler arquivo local da evidência (${uri}): ${fallbackMsg}`);
+}
+
+/**
+ * Constrói uma parte multipart compatível com `expo/fetch` (`convertFormDataAsync`) no Expo SDK 57.
+ */
+export async function createNativeMultipartFilePart(
+  resolvedUri: string,
+  fileName: string,
+  mimeType: string,
+  readBytes: (uri: string) => Promise<Uint8Array<ArrayBuffer>> = readNativeEvidenceBytes
+): Promise<NativeMultipartFilePart> {
+  const fileBytes = ensureArrayBufferBytes(await readBytes(resolvedUri));
+  if (fileBytes.byteLength === 0) {
+    throw new Error(`Arquivo local da evidência está vazio (${resolvedUri}).`);
+  }
+
+  return {
+    uri: resolvedUri,
+    name: fileName,
+    type: mimeType,
+    size: fileBytes.byteLength,
+    bytes: async () => fileBytes,
+    arrayBuffer: async () =>
+      fileBytes.buffer.slice(fileBytes.byteOffset, fileBytes.byteOffset + fileBytes.byteLength),
+  };
+}
+
+/**
  * Constrói o payload `FormData` compatível com `POST /api/v1/sync/upload` (`SyncController.uploadEvidence`).
  */
 export async function buildEvidenceUploadFormData(
-  request: UploadEvidenceRequest
+  request: UploadEvidenceRequest,
+  options?: { readNativeBytes?: (uri: string) => Promise<Uint8Array<ArrayBuffer>> }
 ): Promise<FormData> {
   const formData = new FormData();
   const fileName = request.fileName?.trim() || `${request.evidenceId}.jpg`;
@@ -135,15 +230,20 @@ export async function buildEvidenceUploadFormData(
     const blob = await response.blob();
     formData.append('file', blob, fileName);
   } else {
-    // React Native (Android / iOS) aceita descritor { uri, name, type } no FormData nativo
-    formData.append(
-      'file',
-      {
-        uri: resolvedUri,
-        name: fileName,
-        type: fallbackMimeType,
-      } as unknown as Blob
+    const nativePart = await createNativeMultipartFilePart(
+      resolvedUri,
+      fileName,
+      fallbackMimeType,
+      options?.readNativeBytes
     );
+    const isReactNativeFormData = Array.isArray((formData as { _parts?: unknown })._parts);
+    if (isReactNativeFormData) {
+      // Expo SDK 57 (expo/fetch) exige objeto com `bytes()` além de `name` e `type`
+      formData.append('file', nativePart as unknown as Blob);
+    } else {
+      const fileBytes = await nativePart.bytes();
+      formData.append('file', new Blob([fileBytes], { type: fallbackMimeType }), fileName);
+    }
   }
 
   formData.append('inspectionId', request.inspectionId);
